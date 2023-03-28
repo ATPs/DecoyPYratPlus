@@ -180,7 +180,10 @@ def main():
     outfa = open(args.tout, 'w')
 
     # Open FASTA file using first cmd line argument
-    fasta = open(args.fasta, 'r')
+    if args.fasta.endswith('.gz'):
+        fasta = gzip.open(args.fasta, 'rt')
+    else:
+        fasta = open(args.fasta, 'r')
     # loop each line in the file
     pid = ''
     for line in fasta:
