@@ -61,15 +61,15 @@ parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',
 parser.add_argument('--temp_file', '-t', dest='tout', default='tmp.fa',
                     help='Set temporary file to write decoys prior to shuffling. Default=tmp.fa')
 parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
-                    action='store_true', help='Do not make decoy peptides isobaric. Default=false')
+                    action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
 parser.add_argument('--memory_save', '-m', dest='mem', default=False, action='store_true',
                     help='Slower but uses less memory (does not store decoy peptide list). Default=false')
 parser.add_argument('--keep_names', '-k', dest='names', default=False,
                     action='store_true', help='Keep sequence names in the decoy output. Default=false')
 parser.add_argument('--ItoL', '-I', dest='ItoL', default=False,
-                    action='store_true', help='change amino acid I to L. Default=false')
+                    action='store_true', help='change amino acid I to L in target sequences before generating the decoy sequences. Default=false')
 parser.add_argument('--checkSimilar', '-S', dest='checkSimilar', default=False, action='store_true',
-                    help='''If set, allow overlapped digestion. In default setting, the digested peptides do not overlap with each other.
+                    help='''If set, ItoL is enabled automatically; output_fasta will include target sequences by changing I to L; allow overlapped digestion, and max_peptide_length will be used. In default setting, the digested peptides do not overlap with each other. 
                     "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly until they are unique". 
                     Additionally, consider those amino acids were equal: N=D, Q=E. 
                     If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= min(5, protein_length * 0.05). The trying order defined by:
