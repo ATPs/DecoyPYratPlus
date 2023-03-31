@@ -607,7 +607,11 @@ def main():
             print(nround,'round of shuffling peptide, allow one mutation per peptide')
             # create dAlternative2
             dAlternative2 = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
-            ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args,amino_acids=amino_acids, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shufflewithmut', indel_ratio = 0.1)
+            indel_rate = 0.1
+            if nround > 50 or len(ls_decoy_proteins) < 50:
+                indel_ratio += 0.01
+                print('increase mutation indel_ratio from 10% to ',indel_ratio)
+            ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args,amino_acids=amino_acids, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shufflewithmut', indel_ratio = indel_rate)
             if len(ls_decoy_proteins) == 0:
                 break
         
