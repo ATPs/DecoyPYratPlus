@@ -82,7 +82,7 @@ parser.add_argument('--checkSimilar', '-S', dest='checkSimilar', default=False, 
                      3 * max_iterations times.
                      do_not_shuffle option will be ignored.
                      Default=false''')
-
+args = parser.parse_args()
 # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz
 # /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa
 # '''.split())
