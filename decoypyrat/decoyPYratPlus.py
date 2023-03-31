@@ -610,7 +610,7 @@ def main():
             indel_rate = 0.1
             if nround > 50 or len(ls_decoy_proteins) < 50:
                 indel_rate += 0.01
-                print('increase mutation indel_ratio from 10% to ',indel_ratio)
+                print('increase mutation indel_ratio from 0.1 to ',indel_rate)
             ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args,amino_acids=amino_acids, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shufflewithmut', indel_ratio = indel_rate)
             if len(ls_decoy_proteins) == 0:
                 break
