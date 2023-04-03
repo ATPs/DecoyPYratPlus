@@ -70,6 +70,19 @@ Most decoy peptide were generated with the same method as DecoyPYrat
   * DecoyPYratPlus introduces single mutation to the peptides which cannot be solved by shuffling. Mutation can be substitution, insertion or deletion. AA frequency in decoy database is almost unchanged. 
 * an option of `--all_shuffle_mimic` is provided. The decoy sequences peptides will all be shuffled, nor just revert of the sequence.
   * **Note: It may be a bad idea, since shuffle every decoy peptides will make it much larger of the decoy searching space**
+
+## how it works
+* gzipped and multiple files were combined together and output to file defined by `--target` file. If not set, target sequencces won't be saved. Note: `I` will be changed to `L` in default.
+* If `checkSimilar` is not set, it runs the same as `DecoyPYrat`
+* If `checkSimilar` is enabled,
+  *  if `all_shuffle_mimic` is not enabled
+     *  it first run the same as `DecoyPYrat`
+     *  target protein is digested with number of `miss_cleavage` allowed. Here, only cut at the C-terminal of cleavage sites. The target peptide filtered by `min_peptide_length` and `max_peptide_length`
+     *  The decoy proteins were processed one by one. Get possible decoy peptides through digestion with miss-cleavage allowed. If after considering N=D, Q=E, GG=N, no decoy peptides were identified in target database, save the decoy protein. Otherwise, shuffle the decoy peptide only and do not change the other parts of the protein and get the new decoy protein. Keep the new decoy protein if has fewer peptides that can be identified in target database. Repeat at most 10 rounds until the decoy protein shares no common peptide with the target database. Repeat additionally `max_iterations * 2` rounds by shuffling decoy peptides with mutation allowed. Stop until the new decoy protein shared no peptides in target database.
+  *  if `all_shuffle_mimic` is enabled, almost the same as above. the differences are:
+     *  it first run the same as `DecoyPYrat`, but the peptides were shuffled instead of reversed when first generated.
+     *  the max number of shuffling decoy peptides with mutation were changed to `max_iterations * 5`.
+
 --------
 
 # DecoyPYrat
