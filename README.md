@@ -1,5 +1,6 @@
 # DecoyPYratPlus
 
+## install
 Download the the GitHub package directly
 
 You need to install numpy.
