@@ -5,7 +5,6 @@ Download the the GitHub package directly
 You need to install numpy.
 
 ## usage
-python $PATH_of_decoyPYratPlus/decoyPYratPlus.py --help
 
 `python /data/p/xiaolong/DecoyPYrat/decoypyrat/decoyPYratPlus.py  -h`
 ```ini
