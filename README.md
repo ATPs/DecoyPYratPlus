@@ -68,7 +68,7 @@ Most decoy peptide were generated with the same method as DecoyPYrat
   * allow miss-cleavage when get possible target peptides
     * DecoyPYrat do not include peptides from miss-cleaved sites when checking overlap of target and decoy peptides
   * DecoyPYratPlus introduces single mutation to the peptides which cannot be solved by shuffling. Mutation can be substitution, insertion or deletion. AA frequency in decoy database is almost unchanged. 
-* an option of `--all_shuffle_mimic` is provided. The decoy sequences peptides will all be shuffled, nor just revert of the sequence.
+* an option of `--all_shuffle_mimic` is provided. The decoy sequences peptides will all be shuffled, not just revert of the sequence.
   * **Note: It may be a bad idea, since shuffle every decoy peptides will make it much larger of the decoy searching space**
 
 ## how it works
