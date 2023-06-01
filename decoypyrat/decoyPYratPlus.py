@@ -109,7 +109,7 @@ def read_fasta_file(file_path):
         else:
             sequence += line.strip()
     if sequence:
-        yield header, sequence
+        yield header, sequence.strip('*')
     
     file.close()
 
