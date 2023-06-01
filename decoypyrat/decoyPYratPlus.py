@@ -467,7 +467,7 @@ def main():
     # Open FASTA file using first cmd line argument
     for file_fasta in args.fasta:
         for header, seq in read_fasta_file(file_path=file_fasta):
-            seq = seq.upper()
+            seq = seq.upper().strip('*')
             writeseq(args, seq, upeps, dpeps, outfa, header, dcount)
             if args.target_file:
                 if args.iso == False:
