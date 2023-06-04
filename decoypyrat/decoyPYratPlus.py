@@ -276,7 +276,7 @@ def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
 
     # write decoy protein accession and sequence to file
     if args.names:
-        outfa.write('>{}_{}\n'.format(args.dprefix, pid))
+        outfa.write('>{}_{}\n'.format(args.dprefix, pid.rstrip(">")))
     else:
         outfa.write('>' + args.dprefix + '_' + str(dcount) + '\n')
     outfa.write(decoyseq + '\n')
