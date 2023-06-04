@@ -212,46 +212,6 @@ def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True)
     # return new peptide
     return ''.join(l) + s
 
-# def shuffleProteinWithmut(protein, anti_cleavage_sites, cleavage_sites, mut = 0, indel_ratio = 0.1, amino_acids = None):
-#     """shuffle protein without change position of cleavage_sites and anti_cleavage_sites
-#     if mut is the number of mutations. introduce with mutation, insertion or deletion randomly"""
-#     l = list(protein)
-#     if amino_acids is None:
-#         amino_acids = list('ADEFGHLMSTVWYRKNQPCI')# 20 AA
-    
-#     for i in range(mut):
-#         rand_pos = random.randint(0, len(l) - 1)
-#         new_AA = random.choice(amino_acids)
-#         if random.random() < indel_ratio:
-#             if random.random() < 0.5:
-#                 l[rand_pos] += new_AA #introduce insertion in 10% chance
-#             else:
-#                 l[rand_pos] = '' # introduce deletion
-#         else:
-#             l[rand_pos] = new_AA
-
-#     protein = ''.join(l)
-    
-#     l = list(protein)
-#     l_fix = []
-#     l_nonfix = []
-#     for i in range(len(protein)):
-#         if protein[i] in anti_cleavage_sites or protein[i] in cleavage_sites:
-#             l_fix.append(i)
-#         else:
-#             l_nonfix.append(i)
-    
-#     random.shuffle(l_nonfix)
-#     l_new = []
-#     for i in range(len(protein)):
-#         if i in l_fix:
-#             l_new.append(protein[i])
-#         else:
-#             l_new.append(protein[l_nonfix[-1]])
-#             l_nonfix.pop()
-
-#     # return new peptide
-#     return ''.join(l_new)
 
 def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
     # make sequence isobaric (check args for switch off)
