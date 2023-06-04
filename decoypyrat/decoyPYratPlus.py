@@ -273,9 +273,11 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
     n_pep_shuffle_new = 0
     n_pep_shufflemut_new = 0
     n_pep_cannot_solve = 0
+    n_pep_count_all = 0
     n_pep_shuffle_accepted = []
     # update dAlternative2
     for header, seq, ls_decoy_tochange in ls_decoy_proteins:
+        n_pep_count_all += len(ls_decoy_tochange)
         for p in ls_decoy_tochange:
             if p not in dAlternative2:
                 for i in range(args.maxit):
@@ -293,7 +295,16 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
                 else:
                     n_pep_cannot_solve += 1
     n = n_pep_shuffle_new + n_pep_shufflemut_new + n_pep_cannot_solve
-    print(f'total peptides to alt: {n}; peptide changed by shuffle: {n_pep_shuffle_new}; peptide changed by shuffle with one mutation: {n_pep_shufflemut_new}; peptide with no alternative choices: {n_pep_cannot_solve}')
+    n_all_peptide_count = sum(e[2] for e in ls_decoy_proteins)
+
+    txt = f'total peptides to alt: {n_pep_count_all}\ntotal unique peptides to alt: {n}, of them, '
+    if n_pep_shuffle_new != 0:
+        txt += f'peptide changed by shuffle: {n_pep_shuffle_new}; '
+    if n_pep_shufflemut_new != 0:
+        txt += f'peptide changed by shuffle with one mutation: {n_pep_shufflemut_new}; '
+    if n_pep_cannot_solve != 0:
+        txt += f'eptide with no alternative choices: {n_pep_cannot_solve}'
+    print(txt)
     
     ## change protein sequences and check
     for n in range(len(ls_decoy_proteins)):
