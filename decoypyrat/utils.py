@@ -252,9 +252,13 @@ def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_si
             positions_peptide.append(pep_miss_pos)
     
     # remove overlapped positions
-    for i in range(len(positions_peptide) -1):
-        if positions_peptide[i][1] > positions_peptide[i+1][0]:
-            positions_peptide.pop(i+1)
+    while True:
+        for i in range(len(positions_peptide) - 1):
+            if positions_peptide[i][1] > positions_peptide[i+1][0]:
+                index_to_remove.append(i)
+                break
+        else:
+            break
     
     break_points = [0] + [i for j in positions_peptide for i in j] + [len(proseq)]
     positions_peptide = [[break_points[i],break_points[i+1]] for i in range(len(break_points) -1)]
@@ -272,7 +276,7 @@ def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, 
             if len(l) > 1 and p in dAlternative2:
                 peptide_changed.append(p)
             if len(ls_decoy_tochange) == 1 and len(l) == 1:
-                print('bug!', header, seq, ls_decoy_tochange, l)
+                print('warning!', header, seq, ls_decoy_tochange, l)
             l = [dAlternative2[i] if i in dAlternative2 else i for i in l]
             proseq_changed_by_dAlternative = ''.join(l)
             
