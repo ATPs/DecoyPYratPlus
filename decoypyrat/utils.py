@@ -215,46 +215,52 @@ def TRYPSIN(protein, sites, pos='c', no='P', miss_cleavage=2, peplen_min=6, pepl
     return peptides
 
 
-def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites, cleavage_sites):
+def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_sites='KR',pos='c'):
     '''split proseq to parts, separated by peptide
     anti_cleavage_sites is the AA after the peptide, like "P"
     cleavage_sites is the AA before the peptide, like "KR"
+    pos is n or c. cut at n or c terminal
     '''
     if not peptide:
         return [proseq]
     if peptide not in proseq:
         return [proseq]
-    i = 0
-    positions = []
-    while i <= len(proseq) - len(peptide):
-        pep_start = proseq.find(peptide, i)
-        if pep_start < 0:
-            break
-        elif pep_start == 0:
-            pep_end = pep_start + len(peptide)
-            if pep_end == len(proseq):
-                positions.append([pep_start, pep_end])
-            elif proseq[pep_end] not in anti_cleavage_sites:
-                positions.append([pep_start, pep_end])
-                i = pep_end
-            else:
-                i += 1
-        else:
-            pep_end = pep_start + len(peptide)
-            if proseq[pep_start -1] not in cleavage_sites:
-                i += 1
-            elif pep_end == len(proseq):
-                positions.append([pep_start, pep_end])
-                i = pep_end
-            elif proseq[pep_end] not in anti_cleavage_sites:
-                positions.append([pep_start, pep_end])
-                i = pep_end
-            else:
-                i += 1
+    
+    # count number of miss cleavage in peptide
+    pep_from_pep = digest(protein = peptide, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min=0)
+    pep_from_pep = [i for i in pep_from_pep if i] # remove empty string
+    n_miss_cleavage_site = len(pep_from_pep) - 1
+    if n_miss_cleavage_site > 10:
+        print(proseq, peptide,'double check cleavage')
+    
+    # digest protein
+    peptides = digest(protein = proseq, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min=0)
+    peptides = [i for i in peptides if i]# remove empty string
+    positions = [[0, len(peptides[0])]]
+    for p in peptides[1:]:
+        positions.append([positions[-1][1], positions[-1][1] + len(p)])
+    # get peptides with n_miss_cleavage_site
+    peptides_miss_cleavage = []
+    positions_miss_cleavage = []
+    positions_peptide = []
+    for i in range(len(peptides) - n_miss_cleavage_site):
+        pep_miss = ''.join(peptides[i:i + n_miss_cleavage_site + 1])
+        pep_miss_pos = [positions[i][0], positions[i+ n_miss_cleavage_site][1]]
+        peptides_miss_cleavage.append(pep_miss)
+        positions_miss_cleavage.append(pep_miss_pos)
+        if pep_miss == peptide:
+            positions_peptide.append(pep_miss_pos)
+    
+    # remove overlapped positions
+    for i in range(len(positions_peptide) -1):
+        if positions_peptide[i][1] > positions_peptide[i+1][0]:
+            positions_peptide.pop(i+1)
+    
+    break_points = [0] + [i for j in positions_peptide for i in j] + [len(proseq)]
+    positions_peptide = [[break_points[i],break_points[i+1]] for i in range(len(break_points) -1)]
+    peptides_seg = [proseq[i:j] for i,j in positions_peptide]
+    return [i for i in peptides_seg if i]
 
-    break_points = [0] + [i for j in positions for i in j] + [len(proseq)]
-    positions = [[break_points[i],break_points[i+1]] for i in range(len(break_points) -1)]
-    return [proseq[i:j] for i,j in positions]
 
 def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
     results = []
