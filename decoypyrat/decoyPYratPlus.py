@@ -206,6 +206,7 @@ def checkSimilarForProteins(args):
     print(n_no_change, 'decoy proteins do not contain similar peptide in target proteins')
     print('number of decoy peptides to alter:', len(set(i for j in ls_decoy_proteins for i in j[2])))
     print('number of proteins to alter', len(ls_decoy_proteins))
+    del dpeps_extra
 
     # get amino acid frequency
     amino_acids = Counter()
