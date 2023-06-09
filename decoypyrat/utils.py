@@ -13,7 +13,7 @@ import re
 from multiprocessing import Pool
 import multiprocessing
 import pickle
-
+import random
 
 def read_fasta_file(file_path):
     """
@@ -370,6 +370,7 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
         file_pickle = args.tout + '.temp.pickle'
         with open(file_pickle,'wb') as f:
             pickle.dump([ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args], f)
+        random.shuffle(ls_decoy_proteins)# avoid long running time for some parts
         ls_ranges = split_into_n_parts(range(len(ls_decoy_proteins)), max(args.threads, len(ls_decoy_proteins) // 10000)) # split to args.threads parts or len(ls_decoy_proteins) // 10000 parts, whichever is larger
         pool = Pool(args.threads)
         results = pool.starmap(get_new_protein_with_pep_mut_multiple_pickle, [[file_pickle, i] for i in ls_ranges], chunksize=1)
