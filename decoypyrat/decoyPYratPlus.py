@@ -170,16 +170,10 @@ def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
 
     # reverse and switch protein sequence
     decoyseq = revswitch(seq, args.noswitch, args.csites)
-    if args.all_shuffle_mimic:
-        decoyseq_peps_all = digest(decoyseq, sites=args.csites, pos=args.cpos, no=args.noc, min=0)
-        decoyseq_peps_all = [shuffle(i) for i in decoyseq_peps_all]
-        decoyseq = ''.join(decoyseq_peps_all)
 
-    # do not store decoy peptide set in reduced memory mode
-    if args.mem == False:
-        # update decoy peptide set
-        dpeps.update(digest(decoyseq, args.csites,
-                     args.cpos, args.noc, args.minlen))
+    # update decoy peptide set
+    dpeps.update(digest(decoyseq, args.csites,
+                    args.cpos, args.noc, args.minlen))
 
     # write decoy protein accession and sequence to file
     if args.names:
@@ -444,24 +438,10 @@ def main():
     if checkSimilar:
         print('first, run orginal DecoyPYrat pipeline')
     # Reloop decoy file in reduced memory mode to store only intersecting decoys
-    if args.mem:
-        # open temp decoys
-        with open(args.tout, "rt") as fin:
-            for line in fin:
-                # if line is not accession
-                if line[0] != '>':
-                    # digest protein
-                    peps = digest(line.rstrip(), args.csites, args.cpos, args.noc, args.minlen)
-                    for p in p:
-                        # check if in target peptides if true then add to nonDecoys
-                        if p in upeps:
-                            nonDecoys.add(p)
-        fin.close()
-        print("decoy peptides: !Memory Saving Made!")
-    else:
-        # can only report total number in normal memory mode
-        # find intersecting peptides
-        nonDecoys = upeps.intersection(dpeps)
+
+    # can only report total number in normal memory mode
+    # find intersecting peptides
+    nonDecoys = upeps.intersection(dpeps)
 
     print("#intersection:" + str(len(nonDecoys)))
     # if there are decoy peptides that are in the target peptide set
@@ -661,8 +641,6 @@ if __name__ == "__main__":
                         help='Set temporary file to write decoys prior to shuffling. Default=tmp.fa')
     parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
                         action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
-    parser.add_argument('--memory_save', '-m', dest='mem', default=False, action='store_true',
-                        help='Slower but uses less memory (does not store decoy peptide list). Default=false')
     parser.add_argument('--threads', '-N', dest='threads', default=1, type=int,
                         help='number of threads to use. default 1')
     parser.add_argument('--keep_names', '-k', dest='names', default=False,
