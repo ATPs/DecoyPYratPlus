@@ -255,7 +255,7 @@ def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_si
     while True:
         for i in range(len(positions_peptide) - 1):
             if positions_peptide[i][1] > positions_peptide[i+1][0]:
-                index_to_remove.append(i)
+                positions_peptide.pop(i + 1)
                 break
         else:
             break
