@@ -36,6 +36,8 @@ import numpy as np
 import re
 from multiprocessing import Pool
 import multiprocessing
+import pickle
+
 
 def read_fasta_file(file_path):
     """
@@ -189,35 +191,32 @@ def all_sublists(lst):
         for sublist in itertools.combinations(lst,i):
             yield(sublist)
 
-def get_new_protein_with_pep_mut(header, seq, ls_decoy_tochange, new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
-    '''change proteins by the dict of dAlternative2
-    '''
-    ls_decoy_tochange = sorted(ls_decoy_tochange, key=lambda x:new_decoy_peptides[x] if x in new_decoy_peptides else float('inf'), reverse=True) # change the most abundant peptides first. if peptide not in new_decoy_peptides, it should be put in front as the peptide was identified before
-    peptide_changed = []
-    for p in ls_decoy_tochange:
-        l = splitStringWithPeptide(proseq = seq, peptide = p, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
-        if len(l) > 1 and p in dAlternative2:
-            peptide_changed.append(p)
-        if len(ls_decoy_tochange) == 1 and len(l) == 1:
-            print('bug!', header, seq, ls_decoy_tochange, l)
-        l = [dAlternative2[i] if i in dAlternative2 else i for i in l]
-        proseq_changed_by_dAlternative = ''.join(l)
-        
-    ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
-    ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2])
-    if alter_protein_better:
-        good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
-    else:
-        good = len(ls_decoy_tochange2) <= len(ls_decoy_tochange)
-    if good:
-        return [header, proseq_changed_by_dAlternative, ls_decoy_tochange2], peptide_changed, True
-    else:
-        return [header, seq, ls_decoy_tochange],[], False
 
 def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
     results = []
     for header, seq, ls_decoy_tochange in ls_decoy_proteins:
-        results.append(get_new_protein_with_pep_mut(header, seq, ls_decoy_tochange, new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args))
+        ls_decoy_tochange = sorted(ls_decoy_tochange, key=lambda x:new_decoy_peptides[x] if x in new_decoy_peptides else float('inf'), reverse=True) # change the most abundant peptides first. if peptide not in new_decoy_peptides, it should be put in front as the peptide was identified before
+        peptide_changed = []
+        for p in ls_decoy_tochange:
+            l = splitStringWithPeptide(proseq = seq, peptide = p, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
+            if len(l) > 1 and p in dAlternative2:
+                peptide_changed.append(p)
+            if len(ls_decoy_tochange) == 1 and len(l) == 1:
+                print('bug!', header, seq, ls_decoy_tochange, l)
+            l = [dAlternative2[i] if i in dAlternative2 else i for i in l]
+            proseq_changed_by_dAlternative = ''.join(l)
+            
+        ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2])
+        if alter_protein_better:
+            good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
+        else:
+            good = len(ls_decoy_tochange2) <= len(ls_decoy_tochange)
+        if good:
+            results.append([[header, proseq_changed_by_dAlternative, ls_decoy_tochange2], peptide_changed, True])
+        else:
+            results.append([[header, seq, ls_decoy_tochange],[], False])
+    
     return results
 
 def split_into_n_parts(lst, n):
