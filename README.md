@@ -11,7 +11,7 @@ You need to install numpy.
 ```ini
 usage: decoyPYratPlus.py [-h] [--cleavage_sites CSITES] [--anti_cleavage_sites NOC] [--cleavage_position {c,n}] [--min_peptide_length MINLEN] [--max_peptide_length MAXLEN] [--max_iterations MAXIT]
                          [--miss_cleavage MISS_CLEAVAGE] [--do_not_shuffle] [--all_shuffle_mimic] [--do_not_switch] [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--temp_file TOUT] [--no_isobaric]
-                         [--memory_save] [--keep_names] [--target TARGET_FILE] [--checkSimilar]
+                         [--threads THREADS] [--keep_names] [--target TARGET_FILE] [--checkSimilar]
                          *.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz [*.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz ...]
 
 Create decoy protein sequences. Each protein is reversed and the cleavage sites switched with preceding amino acid. Peptides are checked for existence in target sequences if found the tool will attempt to
@@ -26,7 +26,7 @@ optional arguments:
   --cleavage_sites CSITES, -c CSITES
                         A list of amino acids at which to cleave during digestion. Default = KR
   --anti_cleavage_sites NOC, -a NOC
-                        A list of amino acids at which not to cleave if following cleavage site ie. Proline. Default = none
+                        A list of amino acids at which not to cleave if following cleavage site ie. Proline. Default = "P"
   --cleavage_position {c,n}, -p {c,n}
                         Set cleavage to be c or n terminal of specified cleavage sites. Default = c
   --min_peptide_length MINLEN, -l MINLEN
@@ -48,15 +48,17 @@ optional arguments:
   --temp_file TOUT, -t TOUT
                         Set temporary file to write decoys prior to shuffling. Default=tmp.fa
   --no_isobaric, -i     Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences
-  --memory_save, -m     Slower but uses less memory (does not store decoy peptide list). Default=false
+  --threads THREADS, -N THREADS
+                        number of threads to use. default 1
   --keep_names, -k      Keep sequence names in the decoy output. Default=false
   --target TARGET_FILE, -T TARGET_FILE
                         Combine and store the target file. I will be changed to L default. If no_isobaric, I will not be changed. Default="", do not save file
   --checkSimilar, -S    If set, ItoL is enabled automatically; output_fasta will include target sequences by changing I to L; allow overlapped digestion, and max_peptide_length will be used. In default
                         setting, the digested peptides do not overlap with each other. "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly
                         until they are unique". Additionally, consider those amino acids were equal: N=D, Q=E, GG=N. If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or
-                        insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 3 * max_iterations times.
+                        insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 2 * max_iterations times.
                         do_not_shuffle option will be ignored. Default=false
+
 
 ```
 
@@ -80,7 +82,7 @@ Most decoy peptide were generated with the same method as DecoyPYrat
      *  target protein is digested with number of `miss_cleavage` allowed. Here, only cut at the C-terminal of cleavage sites. The target peptide filtered by `min_peptide_length` and `max_peptide_length`
      *  The decoy proteins were processed one by one. Get possible decoy peptides through digestion with miss-cleavage allowed. If after considering N=D, Q=E, GG=N, no decoy peptides were identified in target database, save the decoy protein. Otherwise, shuffle the decoy peptide only and do not change the other parts of the protein and get the new decoy protein. Keep the new decoy protein if has fewer peptides that can be identified in target database. Repeat at most 10 rounds until the decoy protein shares no common peptide with the target database. Repeat additionally `max_iterations * 2` rounds by shuffling decoy peptides with mutation allowed. Stop until the new decoy protein shared no peptides in target database.
   *  if `all_shuffle_mimic` is enabled, almost the same as above. the differences are:
-     *  it first run the same as `DecoyPYrat`, but the peptides were shuffled instead of reversed when first generated.
+     *  it first run the same as `DecoyPYrat`. Then the reversed peptides were shuffled, so that each reversed peptide will be changed to the same randomized peptide.
      *  the max number of shuffling decoy peptides with mutation were changed to `max_iterations * 5`.
 
 --------
