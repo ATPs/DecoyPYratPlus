@@ -86,11 +86,15 @@ def getDecoyProteinByRevert(args):
     print("decoy peptides:" + str(len(dpeps)))
     return upeps, dpeps
 
-def shuffleForRevert(args, upeps, dpeps):
+
+def shuffleForRevert(args, upeps, dpeps, peps_to_alt = None):
     
     # can only report total number in normal memory mode
     # find intersecting peptides
-    nonDecoys = upeps.intersection(dpeps)
+    if peps_to_alt is None:
+        nonDecoys = upeps.intersection(dpeps)
+    else:
+        nonDecoys = peps_to_alt
 
     print("#intersection:" + str(len(nonDecoys)))
     # if there are decoy peptides that are in the target peptide set
@@ -154,7 +158,6 @@ def shuffleForRevert(args, upeps, dpeps):
         os.rename(args.tout, args.dout)
         print("final decoy peptides:" + str(len(dpeps)))
         return {}
-
 
 
 def checkSimilarForProteins(args):
@@ -268,7 +271,12 @@ def main():
         upeps, dpeps = getDecoyProteinByRevert(args)
         dAlternative = shuffleForRevert(args, upeps, dpeps)
         del upeps, dpeps
-    
+    else:
+        print('all_shuffle_mimic is enabled. Get decoy proteins by revert first. Then change decoy peptides are randomized')
+        args.noshuf = False # have to shuffle
+        upeps, dpeps = getDecoyProteinByRevert(args)
+        dAlternative = shuffleForRevert(args, upeps, dpeps,peps_to_alt=dpeps)
+
 
     if checkSimilar:
         args.dAlternative = dAlternative
