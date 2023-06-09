@@ -283,6 +283,11 @@ def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, 
     
     return results
 
+def get_new_protein_with_pep_mut_multiple_pickle(file_pickle, ls_decoy_proteins_ranges):
+    ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args = pickle.load(open(file_pickle, 'rb'))
+    ls_decoy_proteins = [ls_decoy_proteins[i] for i in ls_decoy_proteins_ranges]
+    return get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
+
 
 def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_extra2, shuffle_method = 'shuffle', **kwargs):
     '''
@@ -352,11 +357,15 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
     if args.threads == 1 or len(ls_decoy_proteins) < 10000:
         results = get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
     else:
-        temp_l = split_into_n_parts(ls_decoy_proteins, n = args.threads * 5)
+        file_pickle = args.tout + '.temp.pickle'
+        with open(file_pickle,'wb') as f:
+            pickle.dump([ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args], f)
+        ls_ranges = split_into_n_parts(range(len(ls_decoy_proteins)), args.threads)
         pool = Pool(args.threads)
-        results = pool.starmap(get_new_protein_with_pep_mut_multiple, [[l, new_decoy_peptides, dAlternative2, alter_protein_better, upeps_extra2, args] for l in temp_l])
+        results = pool.starmap(get_new_protein_with_pep_mut_multiple_pickle, [[file_pickle, i] for i in ls_ranges])
         pool.close()
         pool.join()
+        os.remove(file_pickle)
         results = [i for j in results for i in j]
     ls_decoy_proteins = [i[0] for i in results]
     ## save proteins
