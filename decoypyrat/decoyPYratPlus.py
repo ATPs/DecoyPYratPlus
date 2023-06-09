@@ -34,61 +34,8 @@ import itertools
 from collections import Counter
 import numpy as np
 import re
-
-# Read command line arguments and create help documentation using argparse
-parser = argparse.ArgumentParser(
-        description='''Create decoy protein sequences. Each protein is reversed and the cleavage sites switched with preceding amino acid. 
-		Peptides are checked for existence in target sequences if found the tool will attempt to shuffle them.
-		James.Wright@sanger.ac.uk 2015''')
-parser.add_argument('fasta', metavar='*.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz',
-                    nargs='+',
-                    help='FASTA file of target proteins sequences for which to create decoys')
-parser.add_argument('--cleavage_sites', '-c', dest='csites', default='KR',
-                    help='A list of amino acids at which to cleave during digestion. Default = KR')
-parser.add_argument('--anti_cleavage_sites', '-a', dest='noc', default='',
-                    help='A list of amino acids at which not to cleave if following cleavage site ie. Proline. Default = none')
-parser.add_argument('--cleavage_position', '-p', dest='cpos', default='c', choices=[
-                    'c', 'n'], help='Set cleavage to be c or n terminal of specified cleavage sites. Default = c')
-parser.add_argument('--min_peptide_length', '-l', dest='minlen', default=6, type=int,
-                    help='Set minimum length of peptides to compare between target and decoy. Default = 6')
-parser.add_argument('--max_peptide_length', '-M', dest='maxlen', default=40, type=int,
-                    help='Set max length of peptides to compare between target and decoy.  Default = 40')
-parser.add_argument('--max_iterations', '-n', dest='maxit', default=100, type=int,
-                    help='Set maximum number of times to shuffle a peptide to make it non-target before failing. Default=100')
-parser.add_argument('--miss_cleavage', '-L', dest='miss_cleavage', default=2, type=int,
-                    help='miss_cleavage when digesting protein. only work when checkSimilar is enabled. Default=2')
-parser.add_argument('--do_not_shuffle', '-x', dest='noshuf', default=False, action='store_true',
-                    help='Turn OFF shuffling of decoy peptides that are in the target database. Default=false')
-parser.add_argument('--all_shuffle_mimic', '-R', dest='all_shuffle_mimic', default=False, action='store_true',
-                    help='use random seq when generating decoy proteins. Similar method like mimic. Default=false')
-parser.add_argument('--do_not_switch', '-s', dest='noswitch', default=False, action='store_true',
-                    help='Turn OFF switching of cleavage site with preceding amino acid. Default=false')
-parser.add_argument('--decoy_prefix', '-d', dest='dprefix', default='XXX',
-                    help='Set accesion prefix for decoy proteins in output. Default=XXX')
-parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',
-                    help='Set file to write decoy proteins to. Default=decoy.fa')
-parser.add_argument('--temp_file', '-t', dest='tout', default='tmp.fa',
-                    help='Set temporary file to write decoys prior to shuffling. Default=tmp.fa')
-parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
-                    action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
-parser.add_argument('--memory_save', '-m', dest='mem', default=False, action='store_true',
-                    help='Slower but uses less memory (does not store decoy peptide list). Default=false')
-parser.add_argument('--keep_names', '-k', dest='names', default=False,
-                    action='store_true', help='Keep sequence names in the decoy output. Default=false')
-parser.add_argument('--target', '-T', dest='target_file', default="",
-                    help='Combine and store the target file. I will be changed to L default. If no_isobaric, I will not be changed. Default="", do not save file')
-parser.add_argument('--checkSimilar', '-S', dest='checkSimilar', default=False, action='store_true',
-                    help='''If set, ItoL is enabled automatically; output_fasta will include target sequences by changing I to L; allow overlapped digestion, and max_peptide_length will be used. In default setting, the digested peptides do not overlap with each other. 
-                    "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly until they are unique". 
-                    Additionally, consider those amino acids were equal: N=D, Q=E, GG=N. 
-                    If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 
-                     3 * max_iterations times.
-                     do_not_shuffle option will be ignored.
-                     Default=false''')
-args = parser.parse_args()
-# args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa '''.split())
-# args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa -R'''.split())
-
+from multiprocessing import Pool
+import multiprocessing
 
 def read_fasta_file(file_path):
     """
@@ -248,6 +195,50 @@ def all_sublists(lst):
         for sublist in itertools.combinations(lst,i):
             yield(sublist)
 
+def get_new_protein_with_pep_mut(header, seq, ls_decoy_tochange, new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
+    '''change proteins by the dict of dAlternative2
+    '''
+    ls_decoy_tochange = sorted(ls_decoy_tochange, key=lambda x:new_decoy_peptides[x] if x in new_decoy_peptides else float('inf'), reverse=True) # change the most abundant peptides first. if peptide not in new_decoy_peptides, it should be put in front as the peptide was identified before
+    peptide_changed = []
+    for p in ls_decoy_tochange:
+        l = splitStringWithPeptide(proseq = seq, peptide = p, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
+        if len(l) > 1 and p in dAlternative2:
+            peptide_changed.append(p)
+        if len(ls_decoy_tochange) == 1 and len(l) == 1:
+            print('bug!', header, seq, ls_decoy_tochange, l)
+        l = [dAlternative2[i] if i in dAlternative2 else i for i in l]
+        proseq_changed_by_dAlternative = ''.join(l)
+        
+    ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+    ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2])
+    if alter_protein_better:
+        good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
+    else:
+        good = len(ls_decoy_tochange2) <= len(ls_decoy_tochange)
+    if good:
+        return [header, proseq_changed_by_dAlternative, ls_decoy_tochange2], peptide_changed, True
+    else:
+        return [header, seq, ls_decoy_tochange],[], False
+
+def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
+    results = []
+    for header, seq, ls_decoy_tochange in ls_decoy_proteins:
+        results.append(get_new_protein_with_pep_mut(header, seq, ls_decoy_tochange, new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args))
+    return results
+
+def split_into_n_parts(lst, n):
+    """Split a list into n equal parts"""
+    part_size = len(lst) // n
+    remainder = len(lst) % n
+    
+    parts = []
+    for i in range(n):
+        if i < remainder:
+            parts.append(lst[i*part_size + i:(i+1)*part_size + i + 1])
+        else:
+            parts.append(lst[i*part_size + remainder:(i+1)*part_size + remainder])
+    return parts
+
 
 def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_extra2, shuffle_method = 'shuffle', **kwargs):
     '''
@@ -269,104 +260,91 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
         alter_protein_better = kwargs['alter_protein_better']
     else:
         alter_protein_better = True
-    
+    if 'threads' in kwargs:
+        threads = kwargs['threads']
+
+    new_decoy_peptides = [i for j in ls_decoy_proteins for i in j[2]]
+    n_pep_count_all = len(new_decoy_peptides) # all counts of decoy peptides to mute
+    new_decoy_peptides = Counter(new_decoy_peptides)
+    n_pep_count_unique = len(new_decoy_peptides)# unique new decoy peptides to mutate
+    n_total_proteins = len(ls_decoy_proteins)
+    new_decoy_peptides = {k:v for k,v in new_decoy_peptides.items() if k not in dAlternative2}
+    n_pep_existing = n_pep_count_unique - len(new_decoy_peptides)
     n_pep_shuffle_new = 0
     n_pep_shufflemut_new = 0
     n_pep_cannot_solve = 0
-    n_pep_count_all = 0
-    n_pep_shuffle_accepted = []
-    # update dAlternative2
-    for header, seq, ls_decoy_tochange in ls_decoy_proteins:
-        n_pep_count_all += len(ls_decoy_tochange)
-        for p in ls_decoy_tochange:
-            if p not in dAlternative2:
-                for i in range(args.maxit):
-                    if shuffle_method =='shuffle':
-                        new_pep = shuffle(p)
-                    elif shuffle_method == 'shufflewithmut':
-                        new_pep = shufflewithmut(p, indel_ratio=indel_ratio, amino_acids=amino_acids,fix_C=fix_C)
-                    if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
-                        dAlternative2[p] = new_pep
-                        if shuffle_method == 'shuffle':
-                            n_pep_shuffle_new += 1
-                        elif shuffle_method =='shufflewithmut':
-                            n_pep_shufflemut_new += 1
-                        break
-                else:
-                    n_pep_cannot_solve += 1
-    n = n_pep_shuffle_new + n_pep_shufflemut_new + n_pep_cannot_solve
-    n_all_peptide_count = sum(e[2] for e in ls_decoy_proteins)
+    for p in new_decoy_peptides:
+        if len(set(p)) == 1 and shuffle_method =='shuffle':
+            n_pep_cannot_solve += 1
+        else:
+            for i in range(args.maxit):
+                if shuffle_method =='shuffle':
+                    new_pep = shuffle(p)
+                elif shuffle_method == 'shufflewithmut':
+                    new_pep = shufflewithmut(p, indel_ratio=indel_ratio, amino_acids=amino_acids,fix_C=fix_C)
+                if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                    dAlternative2[p] = new_pep
+                    if shuffle_method == 'shuffle':
+                        n_pep_shuffle_new += 1
+                    elif shuffle_method =='shufflewithmut':
+                        n_pep_shufflemut_new += 1
+                    break
+            else:
+                n_pep_cannot_solve += 1
 
-    txt = f'total peptides to alt: {n_pep_count_all}\ntotal unique peptides to alt: {n}, of them, '
+
+    txt = f'total peptides to alt: {n_pep_count_all}, unique peptides count is: {n_pep_count_unique}, of them, '
     if n_pep_shuffle_new != 0:
         txt += f'peptide changed by shuffle: {n_pep_shuffle_new}; '
     if n_pep_shufflemut_new != 0:
         txt += f'peptide changed by shuffle with one mutation: {n_pep_shufflemut_new}; '
     if n_pep_cannot_solve != 0:
-        txt += f'eptide with no alternative choices: {n_pep_cannot_solve}'
+        txt += f'peptide with no alternative choices: {n_pep_cannot_solve}; '
+    if n_pep_existing != 0:
+        txt += f'peptide existed previously: {n_pep_existing}'
     print(txt)
     
     ## change protein sequences and check
-    for n in range(len(ls_decoy_proteins)):
-        iii = []
-        header, seq, ls_decoy_tochange = ls_decoy_proteins[n]
-        ls_decoy_tochange = list(ls_decoy_tochange)
-        random.shuffle(ls_decoy_tochange)
-        for p in ls_decoy_tochange:
-            l = splitStringWithPeptide(proseq = seq, peptide = p, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
-            if len(l) > 1:
-                iii.append(p)
-            if len(ls_decoy_tochange) == 1 and len(l) == 1:
-                print('bug!', header, seq, ls_decoy_tochange, l)
-            l = [dAlternative2[i] if i in dAlternative2 else i for i in l]
-            proseq_changed_by_dAlternative = ''.join(l)
-            
-        ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, csites=args.csites, noc=args.noc)
-        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2])
-        if alter_protein_better:
-            good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
-        else:
-            good = len(ls_decoy_tochange2) <= len(ls_decoy_tochange)
-        if good:
-            n_pep_shuffle_accepted += iii
-            ls_decoy_proteins[n] = [header, proseq_changed_by_dAlternative, ls_decoy_tochange2]
-
+    if args.threads == 1 or len(ls_decoy_proteins) < 10000:
+        results = get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
+    else:
+        temp_l = split_into_n_parts(ls_decoy_proteins, n = args.threads * 5)
+        pool = Pool(args.threads)
+        results = pool.starmap(get_new_protein_with_pep_mut_multiple, [[l, new_decoy_peptides, dAlternative2, alter_protein_better, upeps_extra2, args] for l in temp_l])
+        pool.close()
+        pool.join()
+        results = [i for j in results for i in j]
+    ls_decoy_proteins = [i[0] for i in results]
     ## save proteins
     for n in range(len(ls_decoy_proteins)):
         header, seq, ls_decoy_tochange = ls_decoy_proteins[n]
         if len(ls_decoy_tochange) == 0:
             fout.write(header+'\n'+seq+'\n')
     ls_decoy_proteins = [i for i in ls_decoy_proteins if len(i[2]) != 0]
-    print('number of proteins left', len(ls_decoy_proteins), 'number of shuffled peptides acepted:', len(set(n_pep_shuffle_accepted)))
+    n_pep_shuffle_accepted = sum(len(i[1]) for i in results)
+    n_pr_changed = sum(i[2] for i in results)
+    print('number of total proteins: {}, number proteins changed: {}, number of proteins left: {}\nnumber of shuffled peptides acepted: {}, of them, {} were unique '.format(n_total_proteins,n_pr_changed,len(ls_decoy_proteins),n_pep_shuffle_accepted, len(set([i for j in results for i in j[1]]))))
     return ls_decoy_proteins
 
 
-def TRYPSIN(proseq, miss_cleavage=2, peplen_min=6, peplen_max=40, csites='KR', noc='P'):
+
+def TRYPSIN(protein, sites, pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
     '''
-    code modified from
-    https://github.com/yafeng/trypsin
-    only return peptides >= peplen_min and <= peplen_max
-    csites is cleavage site, default is "KR"
-    noc is non-cleavage site, default is "P"
+    protein = sequence
+    sites = string of amino acid cleavage sites
+    pos = n or c for n-terminal or c-terminal cleavage
+    no = amino acids following site that would prevent cleavage ie proline
+    peplen_min = minimum length of peptides returned
+    peplen_max = maximum length of peptides returned
+    miss_cleavage = number of max missed cleavage sites
     '''
+    peptides_cut_all = digest(protein = protein, sites=sites, pos=pos, no=no, min=0)
     peptides = []
-    cut_sites = [0]
-    for i in range(0, len(proseq)-1):
-        if proseq[i] in csites and proseq[i+1] not in noc:
-            cut_sites.append(i+1)
-
-    if cut_sites[-1] != len(proseq):
-        cut_sites.append(len(proseq))
-
-    number_of_cut_sites = len(cut_sites)
-
-    for cut_start, cut_end in itertools.combinations(range(number_of_cut_sites), 2):
-        if cut_end - cut_start <= miss_cleavage + 1:
-            peplen = cut_sites[cut_end] - cut_sites[cut_start]
+    for i in range(miss_cleavage + 1):
+        for j in range(len(peptides_cut_all) - i):
+            peptide = ''.join(peptides_cut_all[j:j + i + 1])
+            peplen = len(peptide)
             if peplen >= peplen_min and peplen <= peplen_max:
-                peptide = proseq[cut_sites[cut_start]:cut_sites[cut_end]]
-                if peptide == 'GRGRGR':
-                    break
                 peptides.append(peptide)
 
     return peptides
@@ -414,7 +392,14 @@ def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites, cleavage_sites)
     return [proseq[i:j] for i,j in positions]
 
 
+
 def main():
+    checkSimilar = args.checkSimilar
+    if checkSimilar:
+        print('checkSimilar is enabled, I is always replaced with L.')
+        args.iso =False
+    
+
     # Create empty sets to add all target and decoy peptides
     upeps = set()
     dpeps = set()
@@ -428,12 +413,9 @@ def main():
     # open temporary decoy FASTA file
     outfa = open(args.tout, 'w')
 
-    checkSimilar = args.checkSimilar
+    
     if args.target_file:
         outfa_target = open(args.target_file, 'w')
-    
-    if checkSimilar:
-        target_peptide_extra = []
 
     # Open FASTA file using first cmd line argument
     for file_fasta in args.fasta:
@@ -446,11 +428,6 @@ def main():
                 else:
                     outfa_target.write('{}\n{}\n'.format(header, seq))
             dcount += 1
-            if checkSimilar:
-                target_protein_seq = seq
-                if args.iso == False:
-                    target_protein_seq = target_protein_seq.replace('I', 'L')
-                target_peptide_extra += TRYPSIN(target_protein_seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, csites=args.csites, noc=args.noc)
     
     outfa.close()
 
@@ -463,19 +440,6 @@ def main():
     print("target peptides:" + str(len(upeps)))
     print("decoy peptides:" + str(len(dpeps)))
 
-    # add more upeps
-    if checkSimilar:
-        upeps_extra = upeps | set(target_peptide_extra)
-        print('target peptides after allowing missed clevage:',len(upeps_extra))
-        # add more upeps
-        decoy_peptide_extra = []
-        for header, seq in read_fasta_file(args.tout):
-            decoy_peptide_extra += TRYPSIN(seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, csites=args.csites, noc=args.noc)
-
-        dpeps_extra = dpeps | set(decoy_peptide_extra)
-        print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
-        del target_peptide_extra, decoy_peptide_extra
-    
     # run original command to generate decoy file
     if checkSimilar:
         print('first, run orginal DecoyPYrat pipeline')
@@ -560,20 +524,36 @@ def main():
         os.rename(args.tout, args.dout)
 
         print("final decoy peptides:" + str(len(dpeps)))
-    
+
     if checkSimilar:
         os.rename(args.dout, args.tout)
-        # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
+
+        target_peptide_extra = []
+        for file_fasta in args.fasta:
+            for header, seq in read_fasta_file(file_path=file_fasta):
+                target_protein_seq = seq
+                target_protein_seq = target_protein_seq.replace('I', 'L')
+                target_peptide_extra += TRYPSIN(target_protein_seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+
+        # add more upeps
+        upeps_extra = set(target_peptide_extra)
+        print('target peptides after allowing missed clevage:',len(upeps_extra))
         print('checkSimilar is enabled! N=D, Q=E, GG=N')
+        # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
         upeps_extra2 = set([i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in upeps_extra])
         print('target peptides after N=D, Q=E, GG=N:',len(upeps_extra2))
+        del upeps_extra, upeps, dpeps
 
+        
         # get those do not need further change and save. 
         ls_decoy_proteins = []#store those need change in ls_decoy_proteins
         fout = open(args.dout,'w')
         n_no_change = 0
+        # add more upeps
+        decoy_peptide_extra = []
         for header, seq in read_fasta_file(args.tout):
-            ls_decoy_pep = TRYPSIN(seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, csites=args.csites, noc=args.noc)
+            ls_decoy_pep = TRYPSIN(seq.replace('I', 'L'), miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+            decoy_peptide_extra += ls_decoy_pep
             ls_decoy_tochange = [i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2]
             if len(ls_decoy_tochange) == 0:
                 n_no_change += 1
@@ -581,7 +561,14 @@ def main():
             else:
                 ls_decoy_proteins.append([header, seq, set(ls_decoy_tochange)])
         
+        dpeps_extra = set(decoy_peptide_extra)
+        print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
+        dpeps_extra = set([ i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in dpeps_extra])
+        print('decoy peptides after N=D, Q=E, GG=N:', len(dpeps_extra))
+        del target_peptide_extra, decoy_peptide_extra
         print(n_no_change, 'decoy proteins do not contain similar peptide in target proteins')
+        print('number of decoy peptides to alter:', len(set(i for j in ls_decoy_proteins for i in j[2])))
+        print('number of proteins to alter', len(ls_decoy_proteins))
 
         # get amino acid frequency
         amino_acids = Counter()
@@ -591,14 +578,18 @@ def main():
         normal_AA = 'ADEFGHLMSTVWYRKNQPCI'
         amino_acids = {k:v for k,v in amino_acids.items() if k in normal_AA}
         amino_acids = {k:v/sum(amino_acids.values()) for k,v in amino_acids.items()}
+        print('amino acid frequencies in input proteins are:', {k:str(round(v,3)) for k,v in amino_acids.items()})
+        print('Note: I were changed to L')
 
         # try to solve shuffle peptide only
         ## update dAlternative2
         print('try to solve by shuffle peptide only.')
+        dAlternative_similar = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
+
         for nround in range(10):
             # create dAlternative2
             print(nround,'round of shuffling peptide')
-            dAlternative2 = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
+            dAlternative2 = dAlternative_similar.copy()
             ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shuffle')
             if len(ls_decoy_proteins) == 0:
                 break
@@ -611,7 +602,7 @@ def main():
         for nround in range(args.maxit * n):
             print(nround,'round of shuffling peptide, allow one mutation per peptide')
             # create dAlternative2
-            dAlternative2 = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
+            dAlternative2 = dAlternative_similar.copy()
             if nround > 50 or len(ls_decoy_proteins) < 50:
                 indel_rate += 0.002
                 indel_rate = min(indel_rate, 0.8)
@@ -634,4 +625,60 @@ def main():
 
 
 if __name__ == "__main__":
+    # Read command line arguments and create help documentation using argparse
+    parser = argparse.ArgumentParser(
+            description='''Create decoy protein sequences. Each protein is reversed and the cleavage sites switched with preceding amino acid. 
+            Peptides are checked for existence in target sequences if found the tool will attempt to shuffle them.
+            James.Wright@sanger.ac.uk 2015''')
+    parser.add_argument('fasta', metavar='*.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz',
+                        nargs='+',
+                        help='FASTA file of target proteins sequences for which to create decoys')
+    parser.add_argument('--cleavage_sites', '-c', dest='csites', default='KR',
+                        help='A list of amino acids at which to cleave during digestion. Default = KR')
+    parser.add_argument('--anti_cleavage_sites', '-a', dest='noc', default='P',
+                        help='A list of amino acids at which not to cleave if following cleavage site ie. Proline. Default = "P"')
+    parser.add_argument('--cleavage_position', '-p', dest='cpos', default='c', choices=[
+                        'c', 'n'], help='Set cleavage to be c or n terminal of specified cleavage sites. Default = c')
+    parser.add_argument('--min_peptide_length', '-l', dest='minlen', default=6, type=int,
+                        help='Set minimum length of peptides to compare between target and decoy. Default = 6')
+    parser.add_argument('--max_peptide_length', '-M', dest='maxlen', default=40, type=int,
+                        help='Set max length of peptides to compare between target and decoy.  Default = 40')
+    parser.add_argument('--max_iterations', '-n', dest='maxit', default=100, type=int,
+                        help='Set maximum number of times to shuffle a peptide to make it non-target before failing. Default=100')
+    parser.add_argument('--miss_cleavage', '-L', dest='miss_cleavage', default=2, type=int,
+                        help='miss_cleavage when digesting protein. only work when checkSimilar is enabled. Default=2')
+    parser.add_argument('--do_not_shuffle', '-x', dest='noshuf', default=False, action='store_true',
+                        help='Turn OFF shuffling of decoy peptides that are in the target database. Default=false')
+    parser.add_argument('--all_shuffle_mimic', '-R', dest='all_shuffle_mimic', default=False, action='store_true',
+                        help='use random seq when generating decoy proteins. Similar method like mimic. Default=false')
+    parser.add_argument('--do_not_switch', '-s', dest='noswitch', default=False, action='store_true',
+                        help='Turn OFF switching of cleavage site with preceding amino acid. Default=false')
+    parser.add_argument('--decoy_prefix', '-d', dest='dprefix', default='XXX',
+                        help='Set accesion prefix for decoy proteins in output. Default=XXX')
+    parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',
+                        help='Set file to write decoy proteins to. Default=decoy.fa')
+    parser.add_argument('--temp_file', '-t', dest='tout', default='tmp.fa',
+                        help='Set temporary file to write decoys prior to shuffling. Default=tmp.fa')
+    parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
+                        action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
+    parser.add_argument('--memory_save', '-m', dest='mem', default=False, action='store_true',
+                        help='Slower but uses less memory (does not store decoy peptide list). Default=false')
+    parser.add_argument('--threads', '-N', dest='threads', default=1, type=int,
+                        help='number of threads to use. default 1')
+    parser.add_argument('--keep_names', '-k', dest='names', default=False,
+                        action='store_true', help='Keep sequence names in the decoy output. Default=false')
+    parser.add_argument('--target', '-T', dest='target_file', default="",
+                        help='Combine and store the target file. I will be changed to L default. If no_isobaric, I will not be changed. Default="", do not save file')
+    parser.add_argument('--checkSimilar', '-S', dest='checkSimilar', default=False, action='store_true',
+                        help='''If set, ItoL is enabled automatically; output_fasta will include target sequences by changing I to L; allow overlapped digestion, and max_peptide_length will be used. In default setting, the digested peptides do not overlap with each other. 
+                        "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly until they are unique". 
+                        Additionally, consider those amino acids were equal: N=D, Q=E, GG=N. 
+                        If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 
+                        2 * max_iterations times.
+                        do_not_shuffle option will be ignored.
+                        Default=false''')
+    args = parser.parse_args()
+    # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa '''.split())
+    # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa --threads 10'''.split())
+    # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar --target target.fa -R'''.split())
     main()
