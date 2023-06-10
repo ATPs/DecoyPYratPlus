@@ -81,6 +81,13 @@ def split_into_n_parts(lst, n):
             parts.append(lst[i*part_size + remainder:(i+1)*part_size + remainder])
     return parts
 
+def split_into_n_parts_equal_step(lst, n):
+    """Split a list into n equal parts"""
+    parts = [[] for i in range(n)]
+    for i in range(len(lst)):
+        parts[i % n].append(i)
+    return parts
+
 
 def revswitch(protein, noswitch, sites):
     """Return a reversed protein sequence with cleavage residues switched with preceding residue"""
@@ -269,9 +276,13 @@ def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_si
 def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
     results = []
     for header, seq, ls_decoy_tochange in ls_decoy_proteins:
+        ls_pep_to_change = set([p for p in ls_decoy_tochange if p in dAlternative2])
+        if len(ls_pep_to_change) == 0:
+            results.append([[header, seq, ls_decoy_tochange],[], False])
+            continue
         ls_decoy_tochange = sorted(ls_decoy_tochange, key=lambda x:new_decoy_peptides[x] if x in new_decoy_peptides else float('inf'), reverse=True) # change the most abundant peptides first. if peptide not in new_decoy_peptides, it should be put in front as the peptide was identified before
         peptide_changed = []
-        for p in ls_decoy_tochange:
+        for p in ls_pep_to_change:
             l = splitStringWithPeptide(proseq = seq, peptide = p, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
             if len(l) > 1 and p in dAlternative2:
                 peptide_changed.append(p)
@@ -370,8 +381,9 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
         file_pickle = args.tout + '.temp.pickle'
         with open(file_pickle,'wb') as f:
             pickle.dump([ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args], f)
-        random.shuffle(ls_decoy_proteins)# avoid long running time for some parts
-        ls_ranges = split_into_n_parts(range(len(ls_decoy_proteins)), max(args.threads, len(ls_decoy_proteins) // 10000)) # split to args.threads parts or len(ls_decoy_proteins) // 10000 parts, whichever is larger
+        # random.shuffle(ls_decoy_proteins)# avoid long running time for some parts
+        ls_decoy_proteins = sorted(ls_decoy_proteins, key=lambda x:len(set(x[2])), reverse=True)
+        ls_ranges = split_into_n_parts_equal_step(range(len(ls_decoy_proteins)), max(args.threads, len(ls_decoy_proteins) // 5000)) # split to args.threads parts or len(ls_decoy_proteins) // 5000 parts, whichever is larger
         pool = Pool(args.threads)
         results = pool.starmap(get_new_protein_with_pep_mut_multiple_pickle, [[file_pickle, i] for i in ls_ranges], chunksize=1)
         pool.close()
