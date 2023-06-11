@@ -37,8 +37,13 @@ import re
 from multiprocessing import Pool
 import multiprocessing
 import pickle
+import time
+import threading
 
-from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide
+try:
+    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide
+except:
+    pass
 
 
 def getDecoyProteinByRevert(args):
@@ -159,12 +164,10 @@ def shuffleForRevert(args, upeps, dpeps, peps_to_alt = None):
         print("final decoy peptides:" + str(len(dpeps)))
         return {}
 
-
-def checkSimilarForProteins(args):
-    '''check similar proteins and change
+def get_target_peptides(args):
+    '''digest proteins from input files. use when checkSimilar is enabled
     '''
-    os.rename(args.dout, args.tout)
-    dAlternative = args.dAlternative
+    start_time = time.time()
     target_peptide_extra = []
     for file_fasta in args.fasta:
         for header, seq in read_fasta_file(file_path=file_fasta):
@@ -180,11 +183,19 @@ def checkSimilarForProteins(args):
     upeps_extra2 = set([i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in upeps_extra])
     print('target peptides after N=D, Q=E, GG=N:',len(upeps_extra2))
     del upeps_extra
+    print("--- {:.2f} seconds digest input proteins allowing miss cleavage ---".format(time.time() - start_time))
+    open(args.tout + '.tempfile.upeps_extra2','w').write(str(upeps_extra2))
+    args.upeps_extra2 = upeps_extra2
 
-    
+
+def get_decoy_proteins(args, fout):
+    '''use when checkSimilar is enabled. 
+    get decoy proteins with peptides in upeps
+    '''
+    start_time = time.time()
     # get those do not need further change and save. 
     ls_decoy_proteins = []#store those need change in ls_decoy_proteins
-    fout = open(args.dout,'w')
+    
     n_no_change = 0
     # add more upeps
     decoy_peptide_extra = []
@@ -202,13 +213,20 @@ def checkSimilarForProteins(args):
     print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
     dpeps_extra = set([ i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in dpeps_extra])
     print('decoy peptides after N=D, Q=E, GG=N:', len(dpeps_extra))
-    del target_peptide_extra, decoy_peptide_extra
     print(n_no_change, 'decoy proteins do not contain similar peptide in target proteins')
     print('number of decoy peptides to alter:', len(set(i for j in ls_decoy_proteins for i in j[2])))
     print('number of proteins to alter', len(ls_decoy_proteins))
     del dpeps_extra
+    print("--- {:.2f} seconds get decoy proteins with peptides in target proteins ---".format(time.time() - start_time))
 
-    # get amino acid frequency
+    open(args.tout + '.tempfile.ls_decoy_proteins','w').write(str(ls_decoy_proteins))
+    return len(ls_decoy_proteins)
+
+
+def get_amino_acid_frequency(args):
+    '''get amino acid frequency in file
+    '''
+    start_time = time.time()
     amino_acids = Counter()
     for header, seq in read_fasta_file(args.tout):
         amino_acids += Counter(seq)
@@ -218,18 +236,60 @@ def checkSimilarForProteins(args):
     amino_acids = {k:v/sum(amino_acids.values()) for k,v in amino_acids.items()}
     print('amino acid frequencies in input proteins are:', {k:str(round(v,3)) for k,v in amino_acids.items()})
     print('Note: I were changed to L')
+    args.amino_acids = amino_acids
+    print("--- {:.2f} seconds amino acid frequency ---".format(time.time() - start_time))
+
+
+def checkSimilarForProteins(args):
+    '''check similar proteins and change
+    '''
+    os.rename(args.dout, args.tout)
+    dAlternative = args.dAlternative
+
+    # digest input files allowing miss cleavage
+    thread_upeps = threading.Thread(target = get_target_peptides, args = (args,))
+    thread_upeps.start()
+    
+    # get amino acid frequency
+    thread_aa = threading.Thread(target = get_amino_acid_frequency, args = (args,))
+    thread_aa.start()
+
+    thread_upeps.join()
+    thread_aa.join()
+    upeps_extra2 = args.upeps_extra2
+    amino_acids = args.amino_acids
+
+    # save decoy proteins with no overlapped peptides in upeps_extra2 in args.tout. for the rest, save ls_decoy_proteins in file args.tout + '.temp.pickle'
+    fout = open(args.dout,'w')
+    n_decoy_proteins = get_decoy_proteins(args, fout)# count of decoy proteins to alter
+    args.n_decoy_proteins = n_decoy_proteins
+
 
     # try to solve shuffle peptide only
     ## update dAlternative2
     print('try to solve by shuffle peptide only.')
     dAlternative_similar = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
 
+    # save requred files to disk
+    open(args.tout + '.tempfile.dAlternative_similar','w').write(str(dAlternative_similar))
+    del dAlternative_similar
+    try:
+        del upeps_extra2, args.upeps_extra2
+    except:
+        pass
+    try:
+        del dAlternative, args.dAlternative
+    except:
+        pass
+    
     for nround in range(10):
         # create dAlternative2
-        print(nround,'round of shuffling peptide')
-        dAlternative2 = dAlternative_similar.copy()
-        ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shuffle')
-        if len(ls_decoy_proteins) == 0:
+        start_time = time.time()
+        print(nround + 1,'round of shuffling peptide')
+        n_decoy_proteins = shuffle_decoy_proteins(args=args, fout=fout, shuffle_method = 'shuffle')
+        args.n_decoy_proteins = n_decoy_proteins
+        print("--- {:.2f} seconds {} round of shuffling peptide---".format(time.time() - start_time, nround + 1))
+        if n_decoy_proteins == 0:
             break
 
     ## shuffle with mutation allowed
@@ -238,15 +298,17 @@ def checkSimilarForProteins(args):
     if args.all_shuffle_mimic:
         n = 5
     for nround in range(args.maxit * n):
-        print(nround,'round of shuffling peptide, allow one mutation per peptide')
+        print(nround + 1,'round of shuffling peptide, allow one mutation per peptide')
+        start_time = time.time()
         # create dAlternative2
-        dAlternative2 = dAlternative_similar.copy()
-        if nround > 50 or len(ls_decoy_proteins) < 50:
+        if nround > 50 or n_decoy_proteins < 50:
             indel_rate += 0.002
             indel_rate = min(indel_rate, 0.8)
             print(f'increase mutation indel_ratio from 0.1 to {indel_rate:.3f}')
-        ls_decoy_proteins = shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, args=args,amino_acids=amino_acids, upeps_extra2=upeps_extra2,fout=fout, shuffle_method = 'shufflewithmut', indel_ratio = indel_rate)
-        if len(ls_decoy_proteins) == 0:
+        n_decoy_proteins = shuffle_decoy_proteins(args=args,fout=fout, shuffle_method = 'shufflewithmut', indel_ratio = indel_rate)
+        args.n_decoy_proteins = n_decoy_proteins
+        print("--- {:.2f} seconds {} round of shuffling peptide, allow one mutation per peptide---".format(time.time() - start_time, nround + 1))
+        if n_decoy_proteins == 0:
             break
 
     
@@ -259,6 +321,7 @@ def checkSimilarForProteins(args):
 
     # delete temporary file
     os.remove(args.tout)
+    os.system('rm ' + args.tout +'*')
 
 
 def main():
@@ -268,7 +331,7 @@ def main():
         print('run orginal DecoyPYrat pipeline first. checkSimilar is enabled, I is always replaced with L.')
         args.iso = False
     
-    
+    start_time = time.time()
     if not args.all_shuffle_mimic:
         upeps, dpeps = getDecoyProteinByRevert(args)
         dAlternative = shuffleForRevert(args, upeps, dpeps)
@@ -278,7 +341,8 @@ def main():
         args.noshuf = False # have to shuffle
         upeps, dpeps = getDecoyProteinByRevert(args)
         dAlternative = shuffleForRevert(args, upeps, dpeps,peps_to_alt=dpeps)
-
+        del upeps, dpeps
+    print("--- {:.2f} seconds run orginal DecoyPYrat pipeline first ---".format(time.time() - start_time))
 
     if checkSimilar:
         args.dAlternative = dAlternative

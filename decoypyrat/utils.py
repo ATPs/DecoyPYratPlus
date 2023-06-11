@@ -14,6 +14,8 @@ from multiprocessing import Pool
 import multiprocessing
 import pickle
 import random
+import time
+import gc
 
 def read_fasta_file(file_path):
     """
@@ -304,40 +306,30 @@ def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, 
     
     return results
 
-def get_new_protein_with_pep_mut_multiple_pickle(file_pickle, ls_decoy_proteins_ranges):
-    ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args = pickle.load(open(file_pickle, 'rb'))
-    ls_decoy_proteins = [ls_decoy_proteins[i] for i in ls_decoy_proteins_ranges]
+def get_new_protein_with_pep_mut_multiple_disk(file_ls_decoy_proteins, alter_protein_better, args, ls_decoy_proteins_ranges = None):
+    ls_decoy_proteins = eval(open(file_ls_decoy_proteins).read())
+    if ls_decoy_proteins_ranges is not None:
+        ls_decoy_proteins = [ls_decoy_proteins[i] for i in ls_decoy_proteins_ranges]
+    
+    new_decoy_peptides = eval(open(args.tout + '.tempfile.new_decoy_peptides').read())
+    dAlternative2 = eval(open(args.tout + '.tempfile.dAlternative2').read())
+    upeps_extra2 = eval(open(args.tout + '.tempfile.upeps_extra2').read())
     return get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
 
-
-def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_extra2, shuffle_method = 'shuffle', **kwargs):
+def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_acids=None,fix_C=True):
+    '''update dAlternative2 by shuffling
     '''
-    amino_acids = None, fix_C = True
-    '''
-    if 'indel_ratio' in kwargs:
-        indel_ratio = kwargs['indel_ratio']
-    else:
-        indel_ratio = 0.1
-    if 'amino_acids' in kwargs:
-        amino_acids = kwargs['amino_acids']
-    else:
-        amino_acids = None
-    if 'fix_C' in kwargs:
-        fix_C = kwargs['fix_C']
-    else:
-        fix_C = True
-    if 'alter_protein_better' in kwargs:
-        alter_protein_better = kwargs['alter_protein_better']
-    else:
-        alter_protein_better = True
-    if 'threads' in kwargs:
-        threads = kwargs['threads']
+    file_ls_decoy_proteins = args.tout + '.tempfile.ls_decoy_proteins'
+    ls_decoy_proteins = eval(open(file_ls_decoy_proteins).read())
+    file_dAlternative2 = args.tout + '.tempfile.dAlternative_similar'
+    dAlternative2 = eval(open(file_dAlternative2).read())
+    file_upeps_extra2 = args.tout + '.tempfile.upeps_extra2'
+    upeps_extra2 = eval(open(file_upeps_extra2).read())
 
     new_decoy_peptides = [i for j in ls_decoy_proteins for i in j[2]]
     n_pep_count_all = len(new_decoy_peptides) # all counts of decoy peptides to mute
     new_decoy_peptides = Counter(new_decoy_peptides)
     n_pep_count_unique = len(new_decoy_peptides)# unique new decoy peptides to mutate
-    n_total_proteins = len(ls_decoy_proteins)
     new_decoy_peptides = {k:v for k,v in new_decoy_peptides.items() if k not in dAlternative2}
     n_pep_existing = n_pep_count_unique - len(new_decoy_peptides)
     n_pep_shuffle_new = 0
@@ -373,22 +365,71 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
     if n_pep_existing != 0:
         txt += f'peptide existed previously: {n_pep_existing}'
     print(txt)
+    file_dAlternative2 = args.tout + '.tempfile.dAlternative2'
+    file_new_decoy_peptides = args.tout + '.tempfile.new_decoy_peptides'
+    open(file_dAlternative2,'w').write(str(dAlternative2))
+    open(file_new_decoy_peptides, 'w').write(str(new_decoy_peptides))
+    # return dAlternative2, new_decoy_peptides
+
+
+def split_ls_decoy_proteins_to_n_parts(file_ls_decoy_proteins, nparts):
+    '''file_ls_decoy_proteins stores ls_decoy_proteins
+    '''
+    ls_decoy_proteins = eval(open(file_ls_decoy_proteins).read())
+    ls_decoy_proteins = sorted(ls_decoy_proteins, key=lambda x:len(set(x[2])), reverse=True)
+    ls_ranges = split_into_n_parts_equal_step(range(len(ls_decoy_proteins)), nparts)
+    ls_file_ls_decoy_proteins = []
+    for n in range(nparts):
+        f = file_ls_decoy_proteins + '.part.' + str(n)
+        ls_file_ls_decoy_proteins.append(f)
+        open(f,'w').write(str([ls_decoy_proteins[i] for i in ls_ranges[n]]))
     
-    ## change protein sequences and check
-    if args.threads == 1 or len(ls_decoy_proteins) < 10000:
-        results = get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
+    return ls_file_ls_decoy_proteins
+
+
+def shuffle_decoy_proteins(fout, args, shuffle_method = 'shuffle', **kwargs):
+    '''
+    amino_acids = None, fix_C = True
+    '''
+    if 'indel_ratio' in kwargs:
+        indel_ratio = kwargs['indel_ratio']
     else:
-        file_pickle = args.tout + '.temp.pickle'
-        with open(file_pickle,'wb') as f:
-            pickle.dump([ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args], f)
+        indel_ratio = 0.1
+    if 'amino_acids' in kwargs:
+        amino_acids = kwargs['amino_acids']
+    else:
+        amino_acids = None
+    if 'fix_C' in kwargs:
+        fix_C = kwargs['fix_C']
+    else:
+        fix_C = True
+    if 'alter_protein_better' in kwargs:
+        alter_protein_better = kwargs['alter_protein_better']
+    else:
+        alter_protein_better = True
+    if 'threads' in kwargs:
+        threads = kwargs['threads']
+    
+    n_decoy_proteins = args.n_decoy_proteins
+    ## get new dAlternative2 by shuffling peptides
+    update_dAlternative2(shuffle_method = shuffle_method, args=args,indel_ratio=indel_ratio,amino_acids=amino_acids,fix_C=fix_C)
+    ## change protein sequences and check
+    file_ls_decoy_proteins = args.tout + '.tempfile.ls_decoy_proteins'
+    if args.threads == 1 or n_decoy_proteins < 10000:
+        results = get_new_protein_with_pep_mut_multiple_disk(file_ls_decoy_proteins, alter_protein_better, args, ls_decoy_proteins_ranges = None)
+    else:
+        nparts = max(args.threads, n_decoy_proteins // 10000) #split to args.threads parts or len(ls_decoy_proteins) // 10000 parts, whichever is larger
+        ls_file_ls_decoy_proteins = split_ls_decoy_proteins_to_n_parts(file_ls_decoy_proteins, nparts)
+        ls_params = [[i, alter_protein_better, args] for i in ls_file_ls_decoy_proteins]
         # random.shuffle(ls_decoy_proteins)# avoid long running time for some parts
-        ls_decoy_proteins = sorted(ls_decoy_proteins, key=lambda x:len(set(x[2])), reverse=True)
-        ls_ranges = split_into_n_parts_equal_step(range(len(ls_decoy_proteins)), max(args.threads, len(ls_decoy_proteins) // 5000)) # split to args.threads parts or len(ls_decoy_proteins) // 5000 parts, whichever is larger
         pool = Pool(args.threads)
-        results = pool.starmap(get_new_protein_with_pep_mut_multiple_pickle, [[file_pickle, i] for i in ls_ranges], chunksize=1)
+        # pool = multiprocessing.pool.ThreadPool(args.threads)
+        results = pool.starmap(get_new_protein_with_pep_mut_multiple_disk, ls_params, chunksize=1)
         pool.close()
         pool.join()
-        os.remove(file_pickle)
+        for f in ls_file_ls_decoy_proteins:
+            os.remove(f)
+        os.remove(file_ls_decoy_proteins)
         results = [i for j in results for i in j]
     ls_decoy_proteins = [i[0] for i in results]
     ## save proteins
@@ -399,5 +440,6 @@ def shuffle_decoy_proteins(ls_decoy_proteins, dAlternative2, fout, args, upeps_e
     ls_decoy_proteins = [i for i in ls_decoy_proteins if len(i[2]) != 0]
     n_pep_shuffle_accepted = sum(len(i[1]) for i in results)
     n_pr_changed = sum(i[2] for i in results)
-    print('number of total proteins: {}, number proteins changed: {}, number of proteins left: {}\nnumber of shuffled peptides acepted: {}, of them, {} were unique '.format(n_total_proteins,n_pr_changed,len(ls_decoy_proteins),n_pep_shuffle_accepted, len(set([i for j in results for i in j[1]]))))
-    return ls_decoy_proteins
+    print('number of total proteins: {}, number proteins changed: {}, number of proteins left: {}\nnumber of shuffled peptides acepted: {}, of them, {} were unique '.format(n_decoy_proteins,n_pr_changed,len(ls_decoy_proteins),n_pep_shuffle_accepted, len(set([i for j in results for i in j[1]]))))
+    open(args.tout + '.tempfile.ls_decoy_proteins','w').write(str(ls_decoy_proteins))
+    return len(ls_decoy_proteins)
