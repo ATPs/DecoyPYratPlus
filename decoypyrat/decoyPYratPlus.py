@@ -262,6 +262,7 @@ def checkSimilarForProteins(args):
 
 
 def main():
+    args.tout = args.dout + '.tempfile'
     checkSimilar = args.checkSimilar
     if checkSimilar:
         print('run orginal DecoyPYrat pipeline first. checkSimilar is enabled, I is always replaced with L.')
@@ -318,8 +319,6 @@ if __name__ == "__main__":
                         help='Set accesion prefix for decoy proteins in output. Default=XXX')
     parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',
                         help='Set file to write decoy proteins to. Default=decoy.fa')
-    parser.add_argument('--temp_file', '-t', dest='tout', default='tmp.fa',
-                        help='Set temporary file to write decoys prior to shuffling. Default=tmp.fa')
     parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
                         action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
     parser.add_argument('--threads', '-N', dest='threads', default=1, type=int,
