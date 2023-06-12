@@ -181,25 +181,25 @@ def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amin
     if start_step == 0:
         for i in range(maxit):
             new_pep = shuffle(peptide)
-            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
                 return new_pep,'shuffle'
     
     if start_step <= 1:
         for i in range(maxit):
             new_pep = shufflewithmut(peptide, indel_ratio=0, amino_acids=amino_acids,fix_C=fix_C)
-            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
                 return new_pep,'mut'
     
     if start_step <= 2:
         for i in range(maxit):
             new_pep = shufflewithmut(peptide, indel_ratio=1, amino_acids=amino_acids,fix_C=fix_C)
-            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
                 return new_pep,'indel'
     
     if start_step <= 3:
         for i in range(maxit):
             new_pep = shufflewithmutMultiple(peptide, indel_ratio=0.5, amino_acids=amino_acids,fix_C=fix_C, count_mut_sites=2)
-            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
                 return new_pep,'mutIndel'
     
     return peptide, 'noAlternative'
@@ -336,7 +336,7 @@ def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, 
             proseq_changed_by_dAlternative = ''.join(l)
             
         ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
-        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2])
+        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2])
         if alter_protein_better:
             good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
         else:
@@ -386,7 +386,7 @@ def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_ac
                     new_pep = shuffle(p)
                 elif shuffle_method == 'shufflewithmut':
                     new_pep = shufflewithmut(p, indel_ratio=indel_ratio, amino_acids=amino_acids,fix_C=fix_C)
-                if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
                     dAlternative2[p] = new_pep
                     if shuffle_method == 'shuffle':
                         n_pep_shuffle_new += 1

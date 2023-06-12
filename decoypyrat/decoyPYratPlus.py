@@ -185,13 +185,34 @@ def get_target_peptides(args):
     print('target peptides after allowing missed clevage:',len(upeps_extra))
     print('checkSimilar is enabled! N=D, Q=E, GG=N')
     # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
-    upeps_extra2 = set([i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in upeps_extra])
+    upeps_extra2 = set([i.replace('GG', 'N').replace('N','D').replace('Q','E') for i in upeps_extra])
     print('target peptides after N=D, Q=E, GG=N:',len(upeps_extra2))
     del upeps_extra
     print("--- {:.2f} seconds digest input proteins allowing miss cleavage ---".format(time.time() - start_time))
     # open(args.tout + '.tempfile.upeps_extra2','w').write(str(upeps_extra2))
     args.upeps_extra2 = upeps_extra2
 
+def get_decoy_peptides(args):
+    '''digest proteins from final decoy file. use when checkSimilar is enabled
+    '''
+    start_time = time.time()
+    decoy_peptide_extra = []
+    for header, seq in read_fasta_file(file_path=args.dout):
+        decoy_protein_seq = seq
+        decoy_protein_seq = decoy_protein_seq.replace('I', 'L')
+        decoy_peptide_extra += TRYPSIN(decoy_protein_seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+
+    # add more upeps
+    dpeps_extra = set(decoy_peptide_extra)
+    print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
+    print('checkSimilar is enabled! N=D, Q=E, GG=N')
+    # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
+    dpeps_extra2 = set([i.replace('GG', 'N').replace('N','D').replace('Q','E') for i in dpeps_extra])
+    print('decoy peptides after N=D, Q=E, GG=N:',len(dpeps_extra2))
+    del dpeps_extra
+    print("--- {:.2f} seconds digest decoy proteins allowing miss cleavage ---".format(time.time() - start_time))
+    # open(args.tout + '.tempfile.upeps_extra2','w').write(str(upeps_extra2))
+    args.dpeps_extra2 = dpeps_extra2
 
 def get_decoy_proteins(args, fout):
     '''use when checkSimilar is enabled. 
@@ -207,7 +228,7 @@ def get_decoy_proteins(args, fout):
     for header, seq in read_fasta_file(args.tout):
         ls_decoy_pep = TRYPSIN(seq.replace('I', 'L'), miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
         decoy_peptide_extra += ls_decoy_pep
-        ls_decoy_tochange = [i for i in ls_decoy_pep if i.replace('N','D').replace('Q','E').replace('GG', 'N') in upeps_extra2]
+        ls_decoy_tochange = [i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2]
         if len(ls_decoy_tochange) == 0:
             n_no_change += 1
             fout.write(header+'\n'+seq+'\n')
@@ -216,10 +237,10 @@ def get_decoy_proteins(args, fout):
     
     dpeps_extra = set(decoy_peptide_extra)
     print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
-    dpeps_extra = set([ i.replace('N','D').replace('Q','E').replace('GG', 'N') for i in dpeps_extra])
+    dpeps_extra = set([ i.replace('GG', 'N').replace('N','D').replace('Q','E') for i in dpeps_extra])
     print('decoy peptides after N=D, Q=E, GG=N:', len(dpeps_extra))
     print(n_no_change, 'decoy proteins do not contain similar peptide in target proteins')
-    print('number of decoy peptides to alter:', len(set(i for j in ls_decoy_proteins for i in j[2])))
+    print('number of decoy peptides to alter',sum(len(i[2]) for i in ls_decoy_proteins), 'of which', len(set(i for j in ls_decoy_proteins for i in j[2])),'are unique')
     print('number of proteins to alter', len(ls_decoy_proteins))
     del dpeps_extra
     print("--- {:.2f} seconds get decoy proteins with peptides in target proteins ---".format(time.time() - start_time))
@@ -243,6 +264,61 @@ def get_amino_acid_frequency(args):
     print('Note: I were changed to L')
     args.amino_acids = amino_acids
     print("--- {:.2f} seconds amino acid frequency ---".format(time.time() - start_time))
+
+
+def update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, args):
+    n_decoy_tochange = len(ls_decoy_tochange)
+    random.shuffle(ls_decoy_tochange)
+    iii = 0
+    while(len(ls_decoy_tochange) != 0 and iii <= 2 * n_decoy_tochange):
+        iii += 1
+        for peptide in ls_decoy_tochange:
+            solved_by_dAlternative2 = False
+            
+            # first try to alter with existing peptides in dAlternative2
+            if peptide in dAlternative2:
+                for new_pep in dAlternative2[peptide]:
+                    l = splitStringWithPeptide(proseq = seq, peptide = peptide, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
+                    if len(ls_decoy_tochange) == 1 and len(l) == 1:
+                        print('warning!', header, seq, ls_decoy_tochange, l)
+                    l_new = [new_pep if i == peptide else i for i in l]
+                    proseq_changed_by_dAlternative = ''.join(l_new)
+                    ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+                    ls_decoy_pep = list(set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2]))
+                    if len(ls_decoy_pep) < len(ls_decoy_tochange):
+                        # keep the change
+                        solved_by_dAlternative2 = True
+                        seq = proseq_changed_by_dAlternative
+                        ls_decoy_tochange = ls_decoy_pep
+                        break
+            # if not in dAlternative2, or cannot get good result by using the one in dAlternative2, create new peptide
+            if (peptide not in dAlternative2) or (solved_by_dAlternative2 == False):
+                l = splitStringWithPeptide(proseq = seq, peptide = peptide, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
+                if len(ls_decoy_tochange) == 1 and len(l) == 1:
+                    print('warning!', header, seq, ls_decoy_tochange, l)
+                for i in range(4 * args.maxit):
+                    pep_mut_start_step = i // args.maxit # start from different step 
+                    new_pep, new_pep_comment = get_new_peptide(peptide, upeps_extra2, start_step = pep_mut_start_step,indel_ratio = 1, amino_acids = amino_acids, fix_C = True, maxit=100)
+                    l_new = [new_pep if i == peptide else i for i in l]
+                    proseq_changed_by_dAlternative = ''.join(l_new)
+                    ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+                    ls_decoy_pep = list(set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2]))
+                    if len(ls_decoy_pep) < len(ls_decoy_tochange):
+                        # keep the change
+                        solved_by_dAlternative2 = True
+                        seq = proseq_changed_by_dAlternative
+                        ls_decoy_tochange = ls_decoy_pep
+                        if peptide not in dAlternative2:
+                            dAlternative2[peptide] = []
+                        if new_pep not in dAlternative2[peptide]:
+                            dAlternative2[peptide].append(new_pep)
+                            ls_peptide_altered.append((peptide, new_pep, new_pep_comment))
+                            # print((peptide, new_pep, new_pep_comment))
+                        break
+            if solved_by_dAlternative2:
+                break
+    
+    return header, seq, ls_decoy_tochange
 
 
 def checkSimilarForProteins(args):
@@ -274,7 +350,7 @@ def checkSimilarForProteins(args):
     # try to solve shuffle peptide only
     ## update dAlternative2
     print('try to solve by shuffle peptide')
-    dAlternative_similar = {k:v for k,v in dAlternative.items() if v != '' and v.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2}
+    dAlternative_similar = {k:v for k,v in dAlternative.items() if v != '' and v.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2}
 
     # shuffle create a new dict to store dAlternative_similar. use list as values for multiple choices of alternative peptides
     dAlternative2 = {k:[v] for k,v in dAlternative_similar.items()}
@@ -293,65 +369,24 @@ def checkSimilarForProteins(args):
         header, seq, ls_decoy_tochange = ls_decoy_proteins[n]
         ls_decoy_tochange = list(set(ls_decoy_tochange))
         n_decoy_tochange = len(ls_decoy_tochange)
-        random.shuffle(ls_decoy_tochange)
-        iii = 0
-        while(len(ls_decoy_tochange) != 0 and iii <= 2 * n_decoy_tochange):
-            iii += 1
-            for peptide in ls_decoy_tochange:
-                solved_by_dAlternative2 = False
-                
-                # first try to alter with existing peptides in dAlternative2
-                if peptide in dAlternative2:
-                    for new_pep in dAlternative2[peptide]:
-                        l = splitStringWithPeptide(proseq = seq, peptide = peptide, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
-                        if len(ls_decoy_tochange) == 1 and len(l) == 1:
-                            print('warning!', header, seq, ls_decoy_tochange, l)
-                        l = [new_pep if i == peptide else i for i in l]
-                        proseq_changed_by_dAlternative = ''.join(l)
-                        ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
-                        ls_decoy_pep = list(set(ls_decoy_pep))
-                        if len(ls_decoy_pep) < len(ls_decoy_tochange):
-                            # keep the change
-                            solved_by_dAlternative2 = True
-                            seq = proseq_changed_by_dAlternative
-                            ls_decoy_tochange = ls_decoy_pep
-                            break
-                # if not in dAlternative2, or cannot get good result by using the one in dAlternative2, create new peptide
-                if (peptide not in dAlternative2) or (solved_by_dAlternative2 == False):
-                    l = splitStringWithPeptide(proseq = seq, peptide = peptide, anti_cleavage_sites = args.noc, cleavage_sites = args.csites)
-                    if len(ls_decoy_tochange) == 1 and len(l) == 1:
-                        print('warning!', header, seq, ls_decoy_tochange, l)
-                    for i in range(4 * args.maxit):
-                        pep_mut_start_step = i // args.maxit # start from different step 
-                        new_pep, new_pep_comment = get_new_peptide(peptide, upeps_extra2, start_step = pep_mut_start_step,indel_ratio = 1, amino_acids = amino_acids, fix_C = True, maxit=100)
-                        l_new = [new_pep if i == peptide else i for i in l]
-                        proseq_changed_by_dAlternative = ''.join(l_new)
-                        ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
-                        ls_decoy_pep = list(set([i for i in ls_decoy_pep if i in upeps_extra2]))
-                        if len(ls_decoy_pep) < len(ls_decoy_tochange):
-                            # keep the change
-                            solved_by_dAlternative2 = True
-                            seq = proseq_changed_by_dAlternative
-                            ls_decoy_tochange = ls_decoy_pep
-                            if peptide not in dAlternative2:
-                                dAlternative2[peptide] = []
-                            if new_pep not in dAlternative2[peptide]:
-                                dAlternative2[peptide].append(new_pep)
-                                ls_peptide_altered.append((peptide, new_pep, new_pep_comment))
-                            break
-                if solved_by_dAlternative2:
-                    break
+        header, seq2, ls_decoy_tochange2 = update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, args)
+        
+        ls_decoy_pep = TRYPSIN(seq2, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
+        ls_decoy_pep = list(set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2]))
+        if ls_decoy_pep != ls_decoy_tochange2 or len(ls_decoy_pep) != 0:
+            print('warning',n,ls_decoy_tochange2,ls_decoy_pep)
+            break
         
         # save the protein sequence
-        fout.write(header+'\n'+seq+'\n')
-        if len(ls_decoy_tochange) == 0:
+        fout.write(header+'\n'+seq2+'\n')
+        if len(ls_decoy_tochange2) == 0:
             n_solved += 1
-        elif len(ls_decoy_tochange) < n_decoy_tochange:
+        elif len(ls_decoy_tochange2) < n_decoy_tochange:
             n_improved += 1
-            ls_unsolved_proteins.append([header, seq, ls_decoy_tochange])
+            ls_unsolved_proteins.append([header, seq2, ls_decoy_tochange2])
         else:
             n_noimprove += 1
-            ls_unsolved_proteins.append([header, seq, ls_decoy_tochange])
+            ls_unsolved_proteins.append([header, seq2, ls_decoy_tochange2])
 
 
     print('number of unsolved decoy peptides:', len(set([j for i in ls_unsolved_proteins for j in i[2]])))
