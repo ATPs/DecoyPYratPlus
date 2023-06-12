@@ -128,7 +128,9 @@ def shuffle(peptide, fix_C = True):
 
 
 def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True):
-    """shuffle peptide without moving c-terminal amino acid cleavage site, with one mutation, insertion or deletion"""
+    """shuffle peptide without moving c-terminal amino acid cleavage site, with one mutation, insertion or deletion
+    if indel_ratio > 1, it will be treated as the count of mutation, insertions or deletions
+    """
     if fix_C:
         # extract terminal aa
         s = peptide[-1]
@@ -137,10 +139,10 @@ def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True)
         rand_pos = random.randint(0, len(l) - 1)
     else:
         # extract terminal aa
-        s = peptide
+        s = ''
         # convert peptide to list (remove K/R) and shuffle the list
         l = list(peptide)
-        rand_pos = random.randint(0, len(l)-1)
+        rand_pos = random.randint(0, len(l))
     if amino_acids is None:
         amino_acids = list('ADEFGHLMSTVWYRKNQPCI')# 20 AA
         AA_freq = [1/len(amino_acids) for _ in amino_acids]
@@ -160,7 +162,47 @@ def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True)
     # return new peptide
     return ''.join(l) + s
 
+def shufflewithmutMultiple(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True, count_mut_sites = 1):
+    '''same as above, but introducing count_mut_sites mutations
+    '''
+    for i in range(count_mut_sites):
+        new_pep = shufflewithmut(peptide, indel_ratio, amino_acids, fix_C)
+    return new_pep
 
+
+def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amino_acids = None, fix_C = True, maxit=100):
+    '''shuffle peptide until get a peptide not in upeps_extra2. 4 steps.
+    first, shuffle with function shuffle, for max maxit rounds
+    secondly, shuffle with shufflewithmut, for max maxit rounds, indel_ratio set to 0
+    thirdly, shuffle with shufflewithmut, for max maxit rounds, indel_ratio set to 1
+    fourth, shuffle with shufflewithmutMultiple, for max maxit rounds, indel_ratio set to 0.5, count_mut_sites set to 2
+    start_step = [0,1,2]. start from 0, 1, or 2 steps
+    '''
+    if start_step == 0:
+        for i in range(maxit):
+            new_pep = shuffle(peptide)
+            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                return new_pep,'shuffle'
+    
+    if start_step <= 1:
+        for i in range(maxit):
+            new_pep = shufflewithmut(peptide, indel_ratio=0, amino_acids=amino_acids,fix_C=fix_C)
+            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                return new_pep,'mut'
+    
+    if start_step <= 2:
+        for i in range(maxit):
+            new_pep = shufflewithmut(peptide, indel_ratio=1, amino_acids=amino_acids,fix_C=fix_C)
+            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                return new_pep,'indel'
+    
+    if start_step <= 3:
+        for i in range(maxit):
+            new_pep = shufflewithmutMultiple(peptide, indel_ratio=0.5, amino_acids=amino_acids,fix_C=fix_C, count_mut_sites=2)
+            if new_pep.replace('N','D').replace('Q','E').replace('GG', 'N') not in upeps_extra2:
+                return new_pep,'mutIndel'
+    
+    return peptide, 'noAlternative'
 
 
 def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
