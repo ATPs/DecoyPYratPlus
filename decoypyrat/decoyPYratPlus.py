@@ -360,7 +360,6 @@ def checkSimilarForProteins(args):
 
     # delete temporary file
     os.remove(args.tout)
-    os.system('rm ' + args.tout +'*')
 
 
 def main():
