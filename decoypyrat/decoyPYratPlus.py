@@ -200,7 +200,7 @@ def get_decoy_proteins(args, fout):
     start_time = time.time()
     # get those do not need further change and save. 
     ls_decoy_proteins = []#store those need change in ls_decoy_proteins
-    
+    upeps_extra2 = args.upeps_extra2
     n_no_change = 0
     # add more upeps
     decoy_peptide_extra = []
