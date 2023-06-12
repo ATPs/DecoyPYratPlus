@@ -387,6 +387,7 @@ def main():
     if checkSimilar:
         args.dAlternative = dAlternative
         checkSimilarForProteins(args)
+        print("--- {:.2f} seconds run thw whole pipeline ---".format(time.time() - start_time))
 
 
 
