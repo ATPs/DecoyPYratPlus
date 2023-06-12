@@ -42,7 +42,7 @@ import threading
 import tqdm
 
 try:
-    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide
+    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide, get_new_peptide
 except:
     pass
 
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
                         action='store_true', help='Do not make decoy peptides isobaric. Default=false, I will be changed to L in decoy sequences')
     parser.add_argument('--threads', '-N', dest='threads', default=1, type=int,
-                        help='number of threads to use. default 1')
+                        help='number of threads to use. default 1. Note: currently only one thread is allowed')
     parser.add_argument('--keep_names', '-k', dest='names', default=False,
                         action='store_true', help='Keep sequence names in the decoy output. Default=false')
     parser.add_argument('--target', '-T', dest='target_file', default="",
