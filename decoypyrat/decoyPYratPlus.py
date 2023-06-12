@@ -298,7 +298,7 @@ def update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide
                     print('warning!', header, seq, ls_decoy_tochange, l)
                 for i in range(4 * args.maxit):
                     pep_mut_start_step = i // args.maxit # start from different step 
-                    new_pep, new_pep_comment = get_new_peptide(peptide, upeps_extra2, start_step = pep_mut_start_step,indel_ratio = 1, amino_acids = amino_acids, fix_C = True, maxit=100)
+                    new_pep, new_pep_comment = get_new_peptide(peptide, upeps_extra2, start_step = pep_mut_start_step,indel_ratio = 1, amino_acids = args.amino_acids, fix_C = True, maxit=100)
                     l_new = [new_pep if i == peptide else i for i in l]
                     proseq_changed_by_dAlternative = ''.join(l_new)
                     ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
@@ -395,6 +395,9 @@ def checkSimilarForProteins(args):
 
     # delete temporary file
     os.remove(args.tout)
+
+    get_decoy_peptides(args)
+    print('double check decoy proteins. number of overlapped peptides considering N=D, Q=E, GG=N:', len(args.dpeps_extra2 & upeps_extra2))
 
 
 def main():
