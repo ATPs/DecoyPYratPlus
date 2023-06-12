@@ -266,7 +266,7 @@ def get_amino_acid_frequency(args):
     print("--- {:.2f} seconds amino acid frequency ---".format(time.time() - start_time))
 
 
-def update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, args):
+def update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, upeps_extra2, args):
     n_decoy_tochange = len(ls_decoy_tochange)
     random.shuffle(ls_decoy_tochange)
     iii = 0
@@ -369,7 +369,7 @@ def checkSimilarForProteins(args):
         header, seq, ls_decoy_tochange = ls_decoy_proteins[n]
         ls_decoy_tochange = list(set(ls_decoy_tochange))
         n_decoy_tochange = len(ls_decoy_tochange)
-        header, seq2, ls_decoy_tochange2 = update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, args)
+        header, seq2, ls_decoy_tochange2 = update_one_protein(header, seq, ls_decoy_tochange, dAlternative2, ls_peptide_altered, upeps_extra2, args)
         
         ls_decoy_pep = TRYPSIN(seq2, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
         ls_decoy_pep = list(set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2]))
