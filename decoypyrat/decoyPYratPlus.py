@@ -480,7 +480,7 @@ if __name__ == "__main__":
     parser.add_argument('--all_shuffle_mimic', '-R', dest='all_shuffle_mimic', default=False, action='store_true',
                         help='use random seq when generating decoy proteins. Similar method like mimic. Default=False')
     parser.add_argument('--do_not_switch', '-s', dest='noswitch', default=False, action='store_true',
-                        help='Turn OFF switching of cleavage site with preceding amino acid. Default=False')
+                        help='''If set, revert the whole sequence as decoy. Default=False. Use the pseudo-reverse method used by Comet.''')
     parser.add_argument('--decoy_prefix', '-d', dest='dprefix', default='DECOY',
                         help='Set accesion prefix for decoy proteins in output. Default=DECOY')
     parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',

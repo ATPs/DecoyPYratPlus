@@ -42,7 +42,7 @@ def read_fasta_file(file_path):
     file.close()
 
 # Tryptic Digest - Can be modified to take 'sites' as argument and digest based on that
-def digest(protein, sites, pos, no, min):
+def digest(protein, sites='KR', pos='c', no='P', min_len=0):
     """Return a list of cleaved peptides with minimum length in protein sequence.
             protein = sequence
             sites = string of amino acid cleavage sites
@@ -67,8 +67,8 @@ def digest(protein, sites, pos, no, min):
             protein = protein.replace(a, r)
 
     # filter peptides into list by minimum size
-
-    return list(filter(lambda x: len(x) >= min, (protein.split(','))))
+    l = list(filter(lambda x: len(x) >= min_len, (protein.split(','))))
+    return [i for i in l if i]
 
 def get_new_pep_after_checkSimilar(seq, checkSimilar='GG=N,N=D,Q=E'):
     '''
@@ -102,24 +102,39 @@ def split_into_n_parts_equal_step(lst, n):
     return parts
 
 
-def revswitch(protein, noswitch, sites):
-    """Return a reversed protein sequence with cleavage residues switched with preceding residue"""
+def revswitch(protein, noswitch=False, csites='KR', noc='P', cpos='c'):
+    
+    """Return a reversed protein sequence with cleavage residues switched with preceding residue
+    protein is the protein sequence
+    if noswitch == True, revert the sequence. Else, use the pseudo-reversed method like Comet
+    csites, cleavage sites
+    noc, anti cleavage sites
+    cpos, c or n, cleavage at the n or c terminal
+    """
     # reverse protein sequence with a reverse splice convert to list
-    revseq = list(protein[::-1])
+    if noswitch:
+        return protein[::-1]
 
     if noswitch == False:
-
-        # loop sequence list
-        for i, c in enumerate(revseq):
-            # if value is cleavage site switch with previous amino acid
-            for s in sites:
-                if c == s:
-                    aa = revseq[i-1]
-                    revseq[i-1] = revseq[i]
-                    revseq[i] = aa
-
-    # return reversed with/without switched proteins as string
-    return ''.join(revseq)
+        l = digest(protein=protein, sites=csites, pos=cpos, no=noc, min_len=0)
+        for n in range(len(l)):
+            e = l[n]
+            if cpos == 'c':
+                if e[-1] in csites:
+                    e = e[:-1][::-1] + e[-1]
+                else:
+                    e = e[::-1]
+            elif cpos == 'n':
+                if e[0] in csites:
+                    e = e[0] + e[1:][::-1]
+                else:
+                    e = e[::-1]
+            else:
+                print('error, csites must be n or c')
+            l[n] = e
+    
+        # return reversed with/without switched proteins as string
+        return ''.join(l)
 
 
 def shuffle(peptide, fix_C = True):
@@ -225,7 +240,7 @@ def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
     upeps.update(digest(seq, args.csites, args.cpos, args.noc, args.minlen))
 
     # reverse and switch protein sequence
-    decoyseq = revswitch(seq, args.noswitch, args.csites)
+    decoyseq = revswitch(seq, args.noswitch, args.csites, args.noc, args.cpos)
 
     # update decoy peptide set
     dpeps.update(digest(decoyseq, args.csites,
@@ -265,7 +280,7 @@ def TRYPSIN(protein, sites, pos='c', no='P', miss_cleavage=2, peplen_min=6, pepl
     A list of peptides resulting from trypsin digestion of the protein sequence within the specified length range.
    
     '''
-    peptides_cut_all = digest(protein = protein, sites=sites, pos=pos, no=no, min=0)
+    peptides_cut_all = digest(protein = protein, sites=sites, pos=pos, no=no, min_len=0)
     peptides = []
     for i in range(miss_cleavage + 1):
         for j in range(len(peptides_cut_all) - i):
@@ -289,14 +304,14 @@ def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_si
         return [proseq]
     
     # count number of miss cleavage in peptide
-    pep_from_pep = digest(protein = peptide, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min=0)
+    pep_from_pep = digest(protein = peptide, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min_len=0)
     pep_from_pep = [i for i in pep_from_pep if i] # remove empty string
     n_miss_cleavage_site = len(pep_from_pep) - 1
     if n_miss_cleavage_site > 10:
         print(proseq, peptide,'double check cleavage')
     
     # digest protein
-    peptides = digest(protein = proseq, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min=0)
+    peptides = digest(protein = proseq, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min_len=0)
     peptides = [i for i in peptides if i]# remove empty string
     positions = [[0, len(peptides[0])]]
     for p in peptides[1:]:
