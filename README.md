@@ -86,23 +86,36 @@ optional arguments:
 
 ## updates compare to DecoyPYrat
 Most decoy peptide were generated with the same method as DecoyPYrat
-* gzip file supported, multiple input files
+* gzip file supported, multiple input files were supported.
 * if `checkSimilar` is set, DecoyPYratPlus further remove the possibility that a decoy peptide exists in the target database
   * consider those amino acids were equal: I=L, N=D, Q=E, GG=N. This will further reduce the chance that the decoy peptide is too similar to the target peptide.
   * allow miss-cleavage when get possible target peptides
     * DecoyPYrat do not include peptides from miss-cleaved sites when checking overlap of target and decoy peptides
   * DecoyPYratPlus introduces single mutation to the peptides which cannot be solved by shuffling. Mutation can be substitution, insertion or deletion. AA frequency in decoy database is almost unchanged. 
+  * Human Proteome Project (HPP) Mass Spectrometry Data Interpretation GuidelinesVersion 3.0.0 – October 15, 2019
+    > Even when very high confidence peptide identifications are demonstrated, consider alternate mappings of the peptide to proteins other than the claimed one. Consider isobaric sequence/mass modification variants, all known SAAVs, and unreported SAAVs. Even when a peptide identification is shown to be very highly confident, care should be taken when mapping it to a protein or novel coding element. Consider whether I=L, N[Deamidated]=D, Q[Deamidated]=E, GG=N, Q≈K, F≈M[Oxidation], or other isobaric or near isobaric substitutions could change the mapping of the peptide from an extraordinary result to a mapping to a commonly-observed protein. Consider if a known single amino-acid variation (SAAV) in neXtProt could turn an extraordinary result into an ordinary result. Consider if a single amino-acid change, not yet annotated in a well-known source, could turn an extraordinary result into a questionable result. Check more than one reference proteome (e.g., RefSeq may have entries that UniProt and Ensembl do not, and vice versa). A tool to assist with this analysis is available at neXtProt at https://www.nextprot.org/tools/peptide-uniqueness-checker (Unicity Checker), and another at PeptideAtlas at http://peptideatlas.org/map (ProteoMapper).
+  * set `--checkSimilar "GG=N,N=D,Q=E"` is recommended based on the HPP standard. 
+    * The program will perform the replacement sequentially. That means, it will first replace all "GG" with "N", then replace all "N" with "D" and then replace all "Q" with "E".
+    * The setting should be like `--checkSimilar "GG=N,N=D,Q=E,K=E,F=M"` if considering `Q≈K, F≈M`. If the database is big, it is hard to find proper decoy sequences if many amino acids were treated as equal. It seems that although `Q≈K, F≈M`, they are different enough. We would not recommend to use this setting.
 * an option of `--all_shuffle_mimic` is provided. The decoy sequences peptides will all be shuffled, not just revert of the sequence.
   * **Note: Shuffle every decoy peptides will make the decoy searching space much larger. But here we try to generate the same decoy peptide for each unique target peptide so the decoy database contained slightly more searchable peptides than in the target database.**
   * In [mimic](https://github.com/msaid-de/mimic/tree/master)
     > Mimic combines the advantages of both methods by shuffling peptides in a manner that conserves homolog peptides. The method first identifies all homolog peptides, shuffles the unique peptides and then redistributes them to each protein again again. In this way a set of peptides that are homologs before shuffling will be homologs after shuffling as well https://github.com/percolator/mimic/wiki.
   * Here, more shuffle is done. Since miss-cleavage is allowed, the number of peptide to check is larger. A dictionary is created. The key is the decoy peptide that need to be altered (they were identified in the target database). The value is a list of the alternative decoy peptides. Decoy proteins were checked one by one, each time the alternative decoy peptide were stored in the dictionary, and will be re-used in the following runs. A new alternative decoy peptide will be created if all existing alternatives cannot solve the problem.
+  * This option is useful one the "averaging strategy" is used. 
+    > Keich, U., Tamura, K. & Noble, W. S. Averaging Strategy To Reduce Variability in Target-Decoy Estimates of False Discovery Rate. J Proteome Res 18, 585–593 (2019).
 
-* Human Proteome Project Mass Spectrometry Data Interpretation GuidelinesVersion 3.0.0 – October 15, 2019
-  > Even when very high confidence peptide identifications are demonstrated, consider alternate mappings of the peptide to proteins other than the claimed one. Consider isobaric sequence/mass modification variants, all known SAAVs, and unreported SAAVs. Even when a peptide identification is shown to be very highly confident, care should be taken when mapping it to a protein or novel coding element. Consider whether I=L, N[Deamidated]=D, Q[Deamidated]=E, GG=N, Q≈K, F≈M[Oxidation], or other isobaric or near isobaric substitutions could change the mapping of the peptide from an extraordinary result to a mapping to a commonly-observed protein. Consider if a known single amino-acid variation (SAAV) in neXtProt could turn an extraordinary result into an ordinary result. Consider if a single amino-acid change, not yet annotated in a well-known source, could turn an extraordinary result into a questionable result. Check more than one reference proteome (e.g., RefSeq may have entries that UniProt and Ensembl do not, and vice versa). A tool to assist with this analysis is available at neXtProt at https://www.nextprot.org/tools/peptide-uniqueness-checker (Unicity Checker), and another at PeptideAtlas at http://peptideatlas.org/map (ProteoMapper).
+
 
 * The method for revert the sequences was changed. Now used a method the same to Comet.
   * Comet generates decoys by reversing each target peptide sequence, keeping the N-terminal or C-terminal amino acid in place (depending on the "sense" value of the digestion enzyme specified by search_enzyme_number). For example, peptide DIGSESTK becomes decoy peptide TSESGIDK for a tryptic search and peptide DVINHKGGA becomes DAGGKHNIV for an Asp-N search. https://uwpr.github.io/Comet/parameters/parameters_202301/decoy_search.html
+
+* `--dedup` option added. If enabled, only one one of the duplicated sequences were kept.
+* `--concat` option added. If set `--concat * `, the decoy sequence will be joined with the target sequence by symbol defined in `--concat`. 
+  * Use `*` if the search engine like Comet treats `*` as cutting site. 
+  * Use `R` for Trypsion digestion.
+  * This option can be used for multistage searches. 
+    > Ivanov, M. V., Levitsky, L. I. & Gorshkov, M. V. Adaptation of Decoy Fusion Strategy for Existing Multi-Stage Search Workflows. J. Am. Soc. Mass Spectrom. 27, 1579–1582 (2016).
 
 
 ## how it works
@@ -116,6 +129,13 @@ Most decoy peptide were generated with the same method as DecoyPYrat
   *  if `all_shuffle_mimic` is enabled, almost the same as above. the differences are:
      *  it first run the same as `DecoyPYrat`. Then the reversed peptides were shuffled, so that each reversed peptide will be changed to the same randomized peptide.
      *  the max number of shuffling decoy peptides with mutation were changed to `max_iterations * 5`.
+  *  For each decoy protein, all its peptides (allowing miss-cleavage and considering equal peptides defined by `checkSimilar`, like `I=L,GG=N,N=D,Q=E`) were calculated and the peptides overlapped with the target database were stored in `ls_decoy_tochange`.
+     *  Randomly choose one peptide in `ls_decoy_tochange`. 
+        *  If peptide already existed in the dictionary `dAlternative2`, use previous alternative peptides (each peptide may have multiple alternatives).
+        *  If not, generate an alternative decoy peptide that do not exist in the target database.
+     *  Replace the original peptide in the decoy sequence with the new alternative decoy peptide. Get the count of overlapped decoy peptides. If the number is smaller, save the peptide and alternative peptide in `dAlternative2`, and change the decoy protein. Repeat the process until the decoy protein does not contain peptides that exists in the target database.
+        *  If cannot solve, Regenerate the alternative peptide and allowing introducing AA insertion, deletion or substitution.
+     
 
 --------
 
