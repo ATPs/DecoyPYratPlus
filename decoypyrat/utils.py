@@ -137,39 +137,52 @@ def revswitch(protein, noswitch=False, csites='KR', noc='P', cpos='c'):
         return ''.join(l)
 
 
-def shuffle(peptide, fix_C = True):
-    """shuffle peptide without moving c-terminal amino acid cleavage site if fix_C == True.
-    if fix_C == False, shuffle the whole peptide
+def shuffle(peptide, fix_C = 'c'):
+    """shuffle peptide without moving c-terminal amino acid cleavage site if fix_C == 'c'.
+    shuffle peptide without moving n-terminal amino acid cleavage site if fix_C == 'n'.
+    in other cases, shuffle the whole peptide
     """
-    if fix_C:
+    if fix_C == 'c':
         # extract terminal aa
         s = peptide[-1]
         # convert peptide to list (remove K/R) and shuffle the list
         l = list(peptide[:-1])
+    elif fix_C == 'n':
+        s = peptide[0]
+        l = list(peptide[1:])
     else:
         l = list(peptide)
         s = ''
     random.shuffle(l)
+
     # return new peptide
-    return ''.join(l) + s
+    if fix_C == 'n':
+        return s + ''.join(l)
+    else:
+        return ''.join(l) + s
 
 
-def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True):
+def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = 'c'):
     """shuffle peptide without moving c-terminal amino acid cleavage site, with one mutation, insertion or deletion
     if indel_ratio > 1, it will be treated as the count of mutation, insertions or deletions
     """
-    if fix_C:
+    if fix_C == 'c':
         # extract terminal aa
         s = peptide[-1]
         # convert peptide to list (remove K/R) and shuffle the list
         l = list(peptide[:-1])
         rand_pos = random.randint(0, len(l) - 1)
+    elif fix_C == 'n':
+        s = peptide[0]
+        l = list(peptide[1:])
+        rand_pos = random.randint(0, len(l) - 1) + 1
     else:
         # extract terminal aa
         s = ''
         # convert peptide to list (remove K/R) and shuffle the list
         l = list(peptide)
         rand_pos = random.randint(0, len(l))
+    
     if amino_acids is None:
         amino_acids = list('ADEFGHLMSTVWYRKNQPCI')# 20 AA
         AA_freq = [1/len(amino_acids) for _ in amino_acids]
@@ -186,10 +199,14 @@ def shufflewithmut(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True)
     else:
         l[rand_pos] = new_AA
     random.shuffle(l)
-    # return new peptide
-    return ''.join(l) + s
 
-def shufflewithmutMultiple(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = True, count_mut_sites = 1):
+    # return new peptide
+    if fix_C == 'n':
+        return s + ''.join(l)
+    else:
+        return ''.join(l) + s
+
+def shufflewithmutMultiple(peptide, indel_ratio = 0.1, amino_acids = None, fix_C = 'c', count_mut_sites = 1):
     '''same as above, but introducing count_mut_sites mutations
     '''
     for i in range(count_mut_sites):
@@ -197,7 +214,7 @@ def shufflewithmutMultiple(peptide, indel_ratio = 0.1, amino_acids = None, fix_C
     return new_pep
 
 
-def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amino_acids = None, fix_C = True, maxit=100,checkSimilar='GG=N,N=D,Q=E'):
+def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amino_acids = None, fix_C = 'c', maxit=100,checkSimilar='GG=N,N=D,Q=E'):
     '''shuffle peptide until get a peptide not in upeps_extra2. 4 steps.
     first, shuffle with function shuffle, for max maxit rounds
     secondly, shuffle with shufflewithmut, for max maxit rounds, indel_ratio set to 0
@@ -207,7 +224,7 @@ def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amin
     '''
     if start_step == 0:
         for i in range(maxit):
-            new_pep = shuffle(peptide)
+            new_pep = shuffle(peptide, fix_C=fix_C)
             if get_new_pep_after_checkSimilar(new_pep, checkSimilar) not in upeps_extra2:
                 return new_pep,'shuffle'
     
@@ -385,7 +402,7 @@ def get_new_protein_with_pep_mut_multiple_disk(file_ls_decoy_proteins, alter_pro
     upeps_extra2 = eval(open(args.tout + '.tempfile.upeps_extra2').read())
     return get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args)
 
-def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_acids=None,fix_C=True):
+def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_acids=None,fix_C='c'):
     '''update dAlternative2 by shuffling
     '''
     file_ls_decoy_proteins = args.tout + '.tempfile.ls_decoy_proteins'
@@ -410,7 +427,7 @@ def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_ac
         else:
             for i in range(args.maxit):
                 if shuffle_method =='shuffle':
-                    new_pep = shuffle(p)
+                    new_pep = shuffle(p, fix_C=fix_C)
                 elif shuffle_method == 'shufflewithmut':
                     new_pep = shufflewithmut(p, indel_ratio=indel_ratio, amino_acids=amino_acids,fix_C=fix_C)
                 if get_new_pep_after_checkSimilar(new_pep, args.checkSimilar) not in upeps_extra2:
@@ -458,7 +475,7 @@ def split_ls_decoy_proteins_to_n_parts(file_ls_decoy_proteins, nparts):
 
 def shuffle_decoy_proteins(fout, args, shuffle_method = 'shuffle', **kwargs):
     '''
-    amino_acids = None, fix_C = True
+    amino_acids = None, fix_C = 'c'
     '''
     if 'indel_ratio' in kwargs:
         indel_ratio = kwargs['indel_ratio']
