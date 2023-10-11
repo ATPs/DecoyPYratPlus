@@ -53,11 +53,14 @@ optional arguments:
   --keep_names, -k      Keep sequence names in the decoy output. Default=false
   --target TARGET_FILE, -T TARGET_FILE
                         Combine and store the target file. I will be changed to L default. If no_isobaric, I will not be changed. Default="", do not save file
-  --checkSimilar, -S    If set, ItoL is enabled automatically; output_fasta will include target sequences by changing I to L; allow overlapped digestion, and max_peptide_length will be used. In default
-                        setting, the digested peptides do not overlap with each other. "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly
-                        until they are unique". Additionally, consider those amino acids were equal: N=D, Q=E, GG=N. If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or
-                        insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 2 * max_iterations times.
-                        do_not_shuffle option will be ignored. Default=false
+  --checkSimilar, -S    If set, I to L is enabled automatically; output_fasta will include target sequences by changing I to L.
+                        Allow missed cleavage, and max_peptide_length will be used when determining shared peptides in target and decoy sequences. In default setting, the digested peptides do not overlap with each other. 
+                        "Peptides are checked for existence in target sequences and if found the tool will attempt to shuffle them iterativly until they are unique". 
+                        Additionally, consider those amino acids were equal: N=D, Q=E, GG=N. 
+                        If cannot solve after max_iterations of shuffling, introduce AA mutations, deletions or insertions. AA not in cleavage_sites and anti_cleavage_sites. The number_of_changes (sum of mutations, deletions and insertions) <= 1 for each peptide. 
+                        2 * max_iterations times.
+                        do_not_shuffle option will be ignored.
+                        Default=false
 
 
 ```
@@ -66,12 +69,19 @@ optional arguments:
 Most decoy peptide were generated with the same method as DecoyPYrat
 * gzip file supported, multiple input files
 * if `checkSimilar` is set, DecoyPYratPlus further remove the possibility that a decoy peptide exists in the target database
-  * consider those amino acids were equal: N=D, Q=E, GG=N. This will further reduce the chance that the decoy peptide is too similar to the target peptide.
+  * consider those amino acids were equal: I=L, N=D, Q=E, GG=N. This will further reduce the chance that the decoy peptide is too similar to the target peptide.
   * allow miss-cleavage when get possible target peptides
     * DecoyPYrat do not include peptides from miss-cleaved sites when checking overlap of target and decoy peptides
   * DecoyPYratPlus introduces single mutation to the peptides which cannot be solved by shuffling. Mutation can be substitution, insertion or deletion. AA frequency in decoy database is almost unchanged. 
 * an option of `--all_shuffle_mimic` is provided. The decoy sequences peptides will all be shuffled, not just revert of the sequence.
-  * **Note: It may be a bad idea, since shuffle every decoy peptides will make it much larger of the decoy searching space**
+  * **Note: Shuffle every decoy peptides will make the decoy searching space much larger. But here we try to generate the same decoy peptide for each unique target peptide so the decoy database contained slightly more searchable peptides than in the target database.**
+
+* Human Proteome Project Mass Spectrometry Data Interpretation GuidelinesVersion 3.0.0 – October 15, 2019
+  > Even when very high confidence peptide identifications are demonstrated, consider alternate mappings of the peptide to proteins other than the claimed one. Consider isobaric sequence/mass modification variants, all known SAAVs, and unreported SAAVs. Even when a peptide identification is shown to be very highly confident, care should be taken when mapping it to a protein or novel coding element. Consider whether I=L, N[Deamidated]=D, Q[Deamidated]=E, GG=N, Q≈K, F≈M[Oxidation], or other isobaric or near isobaric substitutions could change the mapping of the peptide from an extraordinary result to a mapping to a commonly-observed protein. Consider if a known single amino-acid variation (SAAV) in neXtProt could turn an extraordinary result into an ordinary result. Consider if a single amino-acid change, not yet annotated in a well-known source, could turn an extraordinary result into a questionable result. Check more than one reference proteome (e.g., RefSeq may have entries that UniProt and Ensembl do not, and vice versa). A tool to assist with this analysis is available at neXtProt at https://www.nextprot.org/tools/peptide-uniqueness-checker (Unicity Checker), and another at PeptideAtlas at http://peptideatlas.org/map (ProteoMapper).
+
+* The method for revert the sequences was changed. Now used a method the same to Comet.
+  * Comet generates decoys by reversing each target peptide sequence, keeping the N-terminal or C-terminal amino acid in place (depending on the "sense" value of the digestion enzyme specified by search_enzyme_number). For example, peptide DIGSESTK becomes decoy peptide TSESGIDK for a tryptic search and peptide DVINHKGGA becomes DAGGKHNIV for an Asp-N search. https://uwpr.github.io/Comet/parameters/parameters_202301/decoy_search.html
+
 
 ## how it works
 * gzipped and multiple files were combined together and output to file defined by `--target` file. If not set, target sequencces won't be saved. Note: `I` will be changed to `L` in default.
