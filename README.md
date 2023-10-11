@@ -3,11 +3,23 @@
 ## install
 Download the the GitHub package directly
 
-You need to install numpy.
+`git clone https://github.com/ATPs/DecoyPYratPlus.git`
+
+You need to install numpy, tqdm.
+```bash
+pip install numpy
+pip install tqdm
+```
+or use conda/mamba
+
+```bash
+mamba  install -c conda-forge tqdm numpy
+```
 
 ## usage
 
-`python /data/p/xiaolong/DecoyPYrat/decoypyrat/decoyPYratPlus.py  -h`
+`python PATH_to_FOLDER_OF_DecoyPYratPlus/decoypyrat/decoyPYratPlus.py  -h`
+
 ```ini
 usage: decoyPYratPlus.py [-h] [--cleavage_sites CSITES] [--anti_cleavage_sites NOC] [--cleavage_position {c,n}]
                          [--min_peptide_length MINLEN] [--max_peptide_length MAXLEN] [--max_iterations MAXIT]
