@@ -148,6 +148,7 @@ def shuffle(peptide, fix_C = True):
         l = list(peptide[:-1])
     else:
         l = list(peptide)
+        s = ''
     random.shuffle(l)
     # return new peptide
     return ''.join(l) + s
