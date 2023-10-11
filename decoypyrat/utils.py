@@ -20,6 +20,7 @@ import gc
 def read_fasta_file(file_path):
     """
     Reads a fasta file and header and sequence.
+    header include '>', but not '\n'
     """
     if file_path.endswith('.gz'):
         file = gzip.open(file_path,'rt')
@@ -69,6 +70,16 @@ def digest(protein, sites, pos, no, min):
 
     return list(filter(lambda x: len(x) >= min, (protein.split(','))))
 
+def get_new_pep_after_checkSimilar(seq, checkSimilar='GG=N,N=D,Q=E'):
+    '''
+    do replacement of Amino Acids as described in checkSimilar. In default setting, replace GG to N, then N to D, then Q to E.
+    '''
+    seqnew = seq
+    l = checkSimilar.split(',')
+    for e in l:
+        old, new = e.split('=')
+        seqnew = seqnew.replace(old, new)
+    return seqnew
 
 def split_into_n_parts(lst, n):
     """Split a list into n equal parts"""
@@ -170,7 +181,7 @@ def shufflewithmutMultiple(peptide, indel_ratio = 0.1, amino_acids = None, fix_C
     return new_pep
 
 
-def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amino_acids = None, fix_C = True, maxit=100):
+def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amino_acids = None, fix_C = True, maxit=100,checkSimilar='GG=N,N=D,Q=E'):
     '''shuffle peptide until get a peptide not in upeps_extra2. 4 steps.
     first, shuffle with function shuffle, for max maxit rounds
     secondly, shuffle with shufflewithmut, for max maxit rounds, indel_ratio set to 0
@@ -181,25 +192,25 @@ def get_new_peptide(peptide, upeps_extra2, start_step = 0, indel_ratio = 1, amin
     if start_step == 0:
         for i in range(maxit):
             new_pep = shuffle(peptide)
-            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
+            if get_new_pep_after_checkSimilar(new_pep, checkSimilar) not in upeps_extra2:
                 return new_pep,'shuffle'
     
     if start_step <= 1:
         for i in range(maxit):
             new_pep = shufflewithmut(peptide, indel_ratio=0, amino_acids=amino_acids,fix_C=fix_C)
-            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
+            if get_new_pep_after_checkSimilar(new_pep, checkSimilar) not in upeps_extra2:
                 return new_pep,'mut'
     
     if start_step <= 2:
         for i in range(maxit):
             new_pep = shufflewithmut(peptide, indel_ratio=1, amino_acids=amino_acids,fix_C=fix_C)
-            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
+            if get_new_pep_after_checkSimilar(new_pep, checkSimilar) not in upeps_extra2:
                 return new_pep,'indel'
     
     if start_step <= 3:
         for i in range(maxit):
             new_pep = shufflewithmutMultiple(peptide, indel_ratio=0.5, amino_acids=amino_acids,fix_C=fix_C, count_mut_sites=2)
-            if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
+            if get_new_pep_after_checkSimilar(new_pep, checkSimilar) not in upeps_extra2:
                 return new_pep,'mutIndel'
     
     return peptide, 'noAlternative'
@@ -224,7 +235,7 @@ def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
     if args.names:
         outfa.write('>{}_{}\n'.format(args.dprefix, pid.strip(">")))
     else:
-        outfa.write('>' + args.dprefix + '_' + str(dcount) + '\n')
+        outfa.write('>' + args.dprefix + '_' + str(dcount) + '\t\t' + pid.strip(">") +'\n')
     outfa.write(decoyseq + '\n')
 
 def all_sublists(lst):
@@ -336,7 +347,7 @@ def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, 
             proseq_changed_by_dAlternative = ''.join(l)
             
         ls_decoy_pep = TRYPSIN(proseq_changed_by_dAlternative, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
-        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if i.replace('GG', 'N').replace('N','D').replace('Q','E') in upeps_extra2])
+        ls_decoy_tochange2 = set([i for i in ls_decoy_pep if get_new_pep_after_checkSimilar(i, args.checkSimilar) in upeps_extra2])
         if alter_protein_better:
             good = len(ls_decoy_tochange2) < len(ls_decoy_tochange)
         else:
@@ -386,7 +397,7 @@ def update_dAlternative2(args, shuffle_method = 'shuffle',indel_ratio=0,amino_ac
                     new_pep = shuffle(p)
                 elif shuffle_method == 'shufflewithmut':
                     new_pep = shufflewithmut(p, indel_ratio=indel_ratio, amino_acids=amino_acids,fix_C=fix_C)
-                if new_pep.replace('GG', 'N').replace('N','D').replace('Q','E') not in upeps_extra2:
+                if get_new_pep_after_checkSimilar(new_pep, args.checkSimilar) not in upeps_extra2:
                     dAlternative2[p] = new_pep
                     if shuffle_method == 'shuffle':
                         n_pep_shuffle_new += 1
@@ -485,3 +496,57 @@ def shuffle_decoy_proteins(fout, args, shuffle_method = 'shuffle', **kwargs):
     print('number of total proteins: {}, number proteins changed: {}, number of proteins left: {}\nnumber of shuffled peptides acepted: {}, of them, {} were unique '.format(n_decoy_proteins,n_pr_changed,len(ls_decoy_proteins),n_pep_shuffle_accepted, len(set([i for j in results for i in j[1]]))))
     open(args.tout + '.tempfile.ls_decoy_proteins','w').write(str(ls_decoy_proteins))
     return len(ls_decoy_proteins)
+
+
+def concat_targe_decoy_protein(file_target, file_decoy, file_output, concat = '*', keepname = False):
+    '''combine sequences in file_target and file_decoy, save in file_output. sequences joined by concat.
+    if keepname == True, sequences
+    '''
+    dc_target = {}
+    for header, seq in read_fasta_file(file_path=file_target):
+        seq = seq.upper().strip('*')
+        dc_target[header] = seq
+    
+    fout_decoy = open(file_output,'w')
+    for header, seq in read_fasta_file(file_path=file_decoy):
+        seq = seq.upper().strip('*')
+        if keepname:
+            seq_new = seq + concat + dc_target['>' + header.split('_', maxsplit=1)[-1]]
+        else:
+            seq_new = seq + concat + dc_target['>' + header.split('\t\t')[-1]]
+        fout_decoy.write('{}\n{}\n'.format(header, seq_new))
+    fout_decoy.close()
+
+
+def fasta_files_dedup(file_input, file_output, ILdifferent = False):
+    '''remove duplicated sequences in file_input, save in file_output.
+    if ILdifferent == True, do not change I to L.
+    else, change I to L.
+    '''
+    if isinstance(file_input, str):
+        file_input = [file_input]
+
+    # open file to save the result
+    outfa = open(file_output, 'w')
+
+    n_count = 0
+    dc_seqcount = {}
+    # Open FASTA file using first cmd line argument
+    for file_fasta in file_input:
+        for header, seq in read_fasta_file(file_path=file_fasta):
+            n_count += 1
+            seq = seq.upper().strip('*')
+
+            if ILdifferent == False:
+                seq = seq.replace('I', 'L')
+            
+            if seq not in dc_seqcount:
+                dc_seqcount[seq] = 1
+                outfa.write('{}\n{}\n'.format(header, seq))
+            else:
+                dc_seqcount[seq] += 1
+
+
+    outfa.close()
+    print('number of input sequences: {}. number of unique sequences: {}'.format(n_count, len(dc_seqcount)))
+    print('{sequence counts: number of sequences}:',dict(Counter(dc_seqcount.values())))
