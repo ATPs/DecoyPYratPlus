@@ -429,7 +429,7 @@ def main():
         upeps, dpeps = getDecoyProteinByRevert(args)
         dAlternative = shuffleForRevert(args, upeps, dpeps,peps_to_alt=dpeps)
         del upeps, dpeps
-    print("--- {:.2f} seconds run orginal DecoyPYrat pipeline first ---".format(time.time() - start_time))
+    print("--- {:.2f} seconds run DecoyPYrat pipeline. Note: pseudo-reverse method was used in default.  ---".format(time.time() - start_time))
 
     if checkSimilar:
         args.dAlternative = dAlternative
