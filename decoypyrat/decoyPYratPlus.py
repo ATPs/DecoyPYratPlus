@@ -120,7 +120,7 @@ def shuffleForRevert(args, upeps, dpeps, peps_to_alt = None):
             aPep = dPep
 
             # shuffle until aPep is not in target set (maximum of 10 iterations)
-            while aPep in upeps and i < args.maxit:
+            while ((aPep in upeps) or aPep == dPep) and i < args.maxit:
 
                 # increment iteration counter
                 i += 1
