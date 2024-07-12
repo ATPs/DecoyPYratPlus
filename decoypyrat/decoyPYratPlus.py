@@ -374,8 +374,8 @@ def checkSimilarForProteins(args):
         ls_decoy_pep = TRYPSIN(seq2, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos)
         ls_decoy_pep = list(set([i for i in ls_decoy_pep if get_new_pep_after_checkSimilar(i, args.checkSimilar) in upeps_extra2]))
         if ls_decoy_pep != ls_decoy_tochange2 or len(ls_decoy_pep) != 0:
-            print('warning',n,ls_decoy_tochange2,ls_decoy_pep)
-            break
+            print('warning, the {n}th protein cannot be solved by shuffling peptides. sequence is {seq}, altered seq is {seq2}. oringal decoy peptides: {ls_decoy_pep}. after shuffling, the decoy peptides: {ls_decoy_tochange2}'.format(n=n,ls_decoy_tochange2=ls_decoy_tochange2,ls_decoy_pep=ls_decoy_pep, seq=seq, seq2=seq2))
+            # break
         
         # save the protein sequence
         fout.write(header+'\n'+seq2+'\n')
