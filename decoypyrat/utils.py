@@ -281,13 +281,13 @@ def all_sublists(lst):
 
 
 
-def TRYPSIN(protein, sites, pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
+def TRYPSIN(protein, sites='KR', pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
     '''
     Digests a protein sequence using trypsin and returns the resulting peptides within a specified length range.
 
     Args:
     protein (str): The amino acid sequence of the protein to be digested.
-    sites (str): A string of amino acid cleavage sites for trypsin.
+    sites (str): A string of amino acid cleavage sites for trypsin. default: 'KR' for TRYPSIN.
     pos (str, optional): A string indicating whether to perform n-terminal or c-terminal cleavage (default is 'c').
     no (str, optional): Amino acids following the cleavage site that would prevent cleavage (default is 'P').
     miss_cleavage (int, optional): The maximum number of missed cleavage sites allowed (default is 2).
