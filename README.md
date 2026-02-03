@@ -24,9 +24,9 @@ mamba  install -c conda-forge tqdm numpy
 usage: decoyPYratPlus.py [-h] [--cleavage_sites CSITES] [--anti_cleavage_sites NOC] [--cleavage_position {c,n}]
                          [--min_peptide_length MINLEN] [--max_peptide_length MAXLEN] [--max_iterations MAXIT]
                          [--miss_cleavage MISS_CLEAVAGE] [--do_not_shuffle] [--all_shuffle_mimic] [--do_not_switch]
-                         [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--no_isobaric] [--threads THREADS]
-                         [--keep_names] [--target TARGET_FILE] [--checkSimilar CHECKSIMILAR] [--concat CONCAT]
-                         [--dedup]
+                         [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--no_isobaric] [--target_I2L]
+                         [--threads THREADS] [--keep_names] [--target TARGET_FILE] [--checkSimilar CHECKSIMILAR]
+                         [--concat CONCAT] [--dedup]
                          *.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz
                          [*.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz ...]
 
@@ -66,17 +66,18 @@ optional arguments:
                         Set file to write decoy proteins to. Default=decoy.fa
   --no_isobaric, -i     Do not make decoy peptides isobaric. Default=False, I will be changed to L in decoy
                         sequences
+  --target_I2L          Convert I to L in target output and dedup. Default=False
   --threads THREADS, -N THREADS
                         number of threads to use. default 1. Note: currently only one thread is allowed
   --keep_names, -k      Keep sequence names in the decoy output. Default=False. if decoy_prefix = "DECOY", name
                         will be like DECOY_1, DECOY_2. The orginal name will be included in the header line,
                         separated by " ". If set, name will be like DECOY_{oringal_name}
   --target TARGET_FILE, -T TARGET_FILE
-                        Combine and store the target file. I will be changed to L default. If no_isobaric, I will
-                        not be changed. Default="", do not save file
+                        Combine and store the target file. Target sequences are unchanged by default; use
+                        --target_I2L to convert I to L. Default="", do not save file
   --checkSimilar CHECKSIMILAR, -S CHECKSIMILAR
-                        If set, I to L is enabled automatically; output_fasta will include target sequences by
-                        changing I to L. To enable this option, it is recommended to set
+                        If set, I/L are treated as the same unless --no_isobaric is set; target output I to L is
+                        controlled by --target_I2L. To enable this option, it is recommended to set
                         checkSimilar="GG=N,N=D,Q=E". Allow missed cleavage, and max_peptide_length will be used
                         when determining shared peptides in target and decoy sequences. In default setting, the
                         digested peptides do not overlap with each other. "Peptides are checked for existence in
@@ -100,7 +101,7 @@ optional arguments:
 Most decoy peptide were generated with the same method as DecoyPYrat
 * gzip file supported, multiple input files were supported.
 * if `checkSimilar` is set, DecoyPYratPlus further remove the possibility that a decoy peptide exists in the target database
-  * consider those amino acids were equal: I=L, N=D, Q=E, GG=N. This will further reduce the chance that the decoy peptide is too similar to the target peptide.
+  * consider those amino acids were equal: I=L (unless `--no_isobaric` is set), N=D, Q=E, GG=N. `--target_I2L` only affects target output, not the overlap check.
   * allow miss-cleavage when get possible target peptides
     * DecoyPYrat do not include peptides from miss-cleaved sites when checking overlap of target and decoy peptides
   * DecoyPYratPlus introduces single mutation to the peptides which cannot be solved by shuffling. Mutation can be substitution, insertion or deletion. AA frequency in decoy database is almost unchanged. 
@@ -131,7 +132,7 @@ Most decoy peptide were generated with the same method as DecoyPYrat
 
 
 ## how it works
-* gzipped and multiple files were combined together and output to file defined by `--target` file. If not set, target sequencces won't be saved. Note: `I` will be changed to `L` in default.
+* gzipped and multiple files were combined together and output to file defined by `--target` file. If not set, target sequencces won't be saved. Note: target `I` is unchanged by default; use `--target_I2L` to convert `I` to `L`.
 * If `checkSimilar` is not set, it runs the same as `DecoyPYrat`
 * If `checkSimilar` is enabled,
   *  if `all_shuffle_mimic` is not enabled
@@ -141,7 +142,7 @@ Most decoy peptide were generated with the same method as DecoyPYrat
   *  if `all_shuffle_mimic` is enabled, almost the same as above. the differences are:
      *  it first run the same as `DecoyPYrat`. Then the reversed peptides were shuffled, so that each reversed peptide will be changed to the same randomized peptide.
      *  the max number of shuffling decoy peptides with mutation were changed to `max_iterations * 5`.
-  *  For each decoy protein, all its peptides (allowing miss-cleavage and considering equal peptides defined by `checkSimilar`, like `I=L,GG=N,N=D,Q=E`) were calculated and the peptides overlapped with the target database were stored in `ls_decoy_tochange`.
+  *  For each decoy protein, all its peptides (allowing miss-cleavage and considering equal peptides defined by `checkSimilar`, like `I=L` unless `--no_isobaric` is set, `GG=N,N=D,Q=E`) were calculated and the peptides overlapped with the target database were stored in `ls_decoy_tochange`.
      *  Randomly choose one peptide in `ls_decoy_tochange`. 
         *  If peptide already existed in the dictionary `dAlternative2`, use previous alternative peptides (each peptide may have multiple alternatives).
         *  If not, generate an alternative decoy peptide that do not exist in the target database.

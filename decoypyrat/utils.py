@@ -16,6 +16,7 @@ import pickle
 import random
 import time
 import gc
+from functools import lru_cache
 
 def read_fasta_file(file_path):
     """
@@ -27,17 +28,17 @@ def read_fasta_file(file_path):
     else:
         file = open(file_path)
     header = ''
-    sequence = ''
+    sequence_parts = []
     for line in file:
         if line.startswith('>'):
-            if sequence:
-                yield header, sequence
-                sequence = ''
+            if sequence_parts:
+                yield header, ''.join(sequence_parts)
+                sequence_parts = []
             header = line.strip()
         else:
-            sequence += line.strip()
-    if sequence:
-        yield header, sequence.strip('*')
+            sequence_parts.append(line.strip())
+    if sequence_parts:
+        yield header, ''.join(sequence_parts).strip('*')
     
     file.close()
 
@@ -70,6 +71,7 @@ def digest(protein, sites='KR', pos='c', no='P', min_len=0):
     l = list(filter(lambda x: len(x) >= min_len, (protein.split(','))))
     return [i for i in l if i]
 
+@lru_cache(maxsize=200000)
 def get_new_pep_after_checkSimilar(seq, checkSimilar='GG=N,N=D,Q=E'):
     '''
     do replacement of Amino Acids as described in checkSimilar. In default setting, replace GG to N, then N to D, then Q to E.
