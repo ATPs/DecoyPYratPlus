@@ -25,8 +25,8 @@ usage: decoyPYratPlus.py [-h] [--cleavage_sites CSITES] [--anti_cleavage_sites N
                          [--min_peptide_length MINLEN] [--max_peptide_length MAXLEN] [--max_iterations MAXIT]
                          [--miss_cleavage MISS_CLEAVAGE] [--do_not_shuffle] [--all_shuffle_mimic] [--do_not_switch]
                          [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--no_isobaric] [--target_I2L]
-                         [--threads THREADS] [--keep_names] [--target TARGET_FILE] [--checkSimilar CHECKSIMILAR]
-                         [--concat CONCAT] [--dedup]
+                         [--fast_digest] [--threads THREADS] [--keep_names] [--target TARGET_FILE]
+                         [--checkSimilar CHECKSIMILAR] [--concat CONCAT] [--dedup]
                          *.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz
                          [*.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz ...]
 
@@ -67,6 +67,7 @@ optional arguments:
   --no_isobaric, -i     Do not make decoy peptides isobaric. Default=False, I will be changed to L in decoy
                         sequences
   --target_I2L          Convert I to L in target output and dedup. Default=False
+  --fast_digest         Use Cython-accelerated digestion if available. Default=False
   --threads THREADS, -N THREADS
                         number of threads to use. default 1. Note: currently only one thread is allowed
   --keep_names, -k      Keep sequence names in the decoy output. Default=False. if decoy_prefix = "DECOY", name
@@ -96,6 +97,37 @@ optional arguments:
                         be kept. default = False.
 
 ```
+
+## optional: fast digest (Cython)
+`--fast_digest` will use a Cython-accelerated digestion module if available. To build it (Cython must already be installed in your environment):
+
+```bash
+cd /data/p/xiaolong/DecoyPYrat
+python setup_fast_digest.py build_ext --inplace
+```
+
+If the module cannot be built or imported, the program falls back to the pure Python implementation.
+
+### Example benchmark (user-provided)
+Command:
+```bash
+python /data/p/xiaolong/DecoyPYrat/decoypyrat/decoyPYratPlus.py /data2/pub/proteome/web/protinsight/comet/proteins/20260206/protinsight_proteinseq.fasta --output_fasta /data2/pub/proteome/web/protinsight/comet/proteins/20260206/protinsight_proteinseq.decoy.fasta --keep_names --checkSimilar "GG=N,N=D,Q=E" --min_peptide_length 7 --max_peptide_length 40 --all_shuffle_mimic
+```
+
+Pure Python (no `--fast_digest`): total time ~214.82 seconds. Key stages:
+- digest input proteins allowing miss cleavage: ~29.10 s
+- get decoy proteins with peptides in target proteins: ~49.49 s
+- digest decoy proteins allowing miss cleavage: ~22.77 s
+
+Same command with `--fast_digest`:
+```bash
+python /data/p/xiaolong/DecoyPYrat/decoypyrat/decoyPYratPlus.py /data2/pub/proteome/web/protinsight/comet/proteins/20260206/protinsight_proteinseq.fasta --output_fasta /data2/pub/proteome/web/protinsight/comet/proteins/20260206/protinsight_proteinseq.decoy.fasta --keep_names --checkSimilar "GG=N,N=D,Q=E" --min_peptide_length 7 --max_peptide_length 40 --all_shuffle_mimic --fast_digest
+```
+
+With `--fast_digest`: total time ~158.10 seconds. Key stages:
+- digest input proteins allowing miss cleavage: ~14.87 s
+- get decoy proteins with peptides in target proteins: ~39.00 s
+- digest decoy proteins allowing miss cleavage: ~13.19 s
 
 ## updates compare to DecoyPYrat
 Most decoy peptide were generated with the same method as DecoyPYrat

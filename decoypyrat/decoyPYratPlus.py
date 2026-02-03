@@ -41,7 +41,7 @@ import time
 import threading
 
 try:
-    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide, get_new_peptide, get_new_pep_after_checkSimilar,concat_targe_decoy_protein,fasta_files_dedup
+    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide, get_new_peptide, get_new_pep_after_checkSimilar,concat_targe_decoy_protein,fasta_files_dedup, set_fast_digest
 except:
     pass
 
@@ -495,6 +495,8 @@ if __name__ == "__main__":
                         action='store_true', help='Do not make decoy peptides isobaric. Default=False, I will be changed to L in decoy sequences')
     parser.add_argument('--target_I2L', dest='target_i2l', default=False,
                         action='store_true', help='Convert I to L in target output and dedup. Default=False')
+    parser.add_argument('--fast_digest', dest='fast_digest', default=False,
+                        action='store_true', help='Use Cython-accelerated digestion if available. Default=False')
     parser.add_argument('--threads', '-N', dest='threads', default=1, type=int,
                         help='number of threads to use. default 1. Note: currently only one thread is allowed')
     parser.add_argument('--keep_names', '-k', dest='names', default=False,
@@ -514,6 +516,11 @@ if __name__ == "__main__":
     parser.add_argument('--concat','-C', dest='concat', default='', help='''default = "", do not append target sequences to decoy sequences. If concat is set, the target sequence is appended to decoy sequences, with concat as the separator. use '*' for comet or other engines which treat "*" as separator. the same as cleavage_sites ("R" in most cases) for other search engines ''')
     parser.add_argument('--dedup','-U', dest='dedup', default=False, action='store_true', help='''If set, try to remove duplicated sequences in the target database. The first sequence will be kept. default = False.''')
     args = parser.parse_args()
+    try:
+        set_fast_digest(args.fast_digest)
+    except Exception:
+        if args.fast_digest:
+            print('fast_digest unavailable; falling back to pure Python.')
     # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar GG=N,N=D,Q=E --target target.fa '''.split())
     # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar GG=N,N=D,Q=E --target target.fa --threads 10'''.split())
     # args = parser.parse_args('''/data/pub/genome/mouse/uniprot/20230301/UP000000589_10090.fasta.gz  /data/pub/genome/mouse/uniprot/20230301/UP000000589_10090_additional.fasta.gz /data/p/maxquant/MaxQuant_2.1.4.0/bin/conf/contaminants.fasta --checkSimilar GG=N,N=D,Q=E --target target.fa -R'''.split())
