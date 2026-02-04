@@ -51,6 +51,34 @@ except:
     print('Cannot import tqdm.py. Please install tqdm.')
     tqdm = False
 
+def extract_target_header_from_decoy(header, dprefix):
+    if not header.startswith('>' + dprefix + '_'):
+        return None
+    if '\t\t' in header:
+        return '>' + header.split('\t\t', maxsplit=1)[1].lstrip('>')
+    return '>' + header[len(dprefix) + 2:]
+
+def load_existing_decoys(args):
+    if not args.existing_decoy:
+        return {}
+    decoy_map = {}
+    n_duplicate = 0
+    n_skipped = 0
+    for header, seq in read_fasta_file(file_path=args.existing_decoy):
+        target_header = extract_target_header_from_decoy(header, args.dprefix)
+        if target_header is None:
+            n_skipped += 1
+            continue
+        if target_header in decoy_map:
+            n_duplicate += 1
+            continue
+        decoy_map[target_header] = seq
+    if n_skipped:
+        print('warning: {} decoy entries skipped because decoy_prefix did not match'.format(n_skipped))
+    if n_duplicate:
+        print('warning: {} duplicate decoy entries ignored'.format(n_duplicate))
+    return decoy_map
+
 def getDecoyProteinByRevert(args):
     '''get decoy proteins by revert
     '''
@@ -72,11 +100,32 @@ def getDecoyProteinByRevert(args):
     if args.target_file:
         outfa_target = open(args.target_file, 'w')
 
+    existing_decoy_map = {}
+    target_headers_seen = set()
+    n_targets_total = 0
+    n_targets_with_decoy = 0
+    args.existing_decoy_records = []
+    if args.existing_decoy:
+        existing_decoy_map = load_existing_decoys(args)
+
     # Open FASTA file using first cmd line argument
     for file_fasta in args.fasta:
         for header, seq in read_fasta_file(file_path=file_fasta):
             seq = seq.upper().strip('*')
-            writeseq(args, seq, upeps, dpeps, outfa, header, dcount)
+            n_targets_total += 1
+            target_headers_seen.add(header)
+            if args.existing_decoy and header in existing_decoy_map:
+                n_targets_with_decoy += 1
+                decoy_seq_raw = existing_decoy_map[header]
+                seq_for_digest = seq if args.iso else seq.replace('I', 'L')
+                upeps.update(digest(seq_for_digest, args.csites, args.cpos, args.noc, args.minlen))
+                decoy_seq_for_digest = decoy_seq_raw.upper().strip('*')
+                if not args.iso:
+                    decoy_seq_for_digest = decoy_seq_for_digest.replace('I', 'L')
+                dpeps.update(digest(decoy_seq_for_digest, args.csites, args.cpos, args.noc, args.minlen))
+                args.existing_decoy_records.append((header, decoy_seq_raw))
+            else:
+                writeseq(args, seq, upeps, dpeps, outfa, header, dcount)
             if args.target_file:
                 if args.target_i2l:
                     outfa_target.write('{}\n{}\n'.format(header, seq.replace('I', 'L')))
@@ -92,6 +141,11 @@ def getDecoyProteinByRevert(args):
     # Summarise the numbers of target and decoy peptides and their intersection
     nonDecoys = set()
     print("proteins:" + str(dcount - 1))
+    if args.existing_decoy:
+        n_targets_without_decoy = n_targets_total - n_targets_with_decoy
+        extra_decoys = len(set(existing_decoy_map.keys()) - target_headers_seen)
+        print('existing decoys: {} targets matched, {} targets missing'.format(n_targets_with_decoy, n_targets_without_decoy))
+        print('existing decoys without targets (removed): {}'.format(extra_decoys))
     print("target peptides:" + str(len(upeps)))
     print("decoy peptides:" + str(len(dpeps)))
     return upeps, dpeps
@@ -168,6 +222,23 @@ def shuffleForRevert(args, upeps, dpeps, peps_to_alt = None):
         os.rename(args.tout, args.dout)
         print("final decoy peptides:" + str(len(dpeps)))
         return {}
+
+def merge_existing_decoys(args):
+    if not getattr(args, 'existing_decoy_records', None):
+        return
+    tmp_out = args.dout + '.with_existing'
+    with open(tmp_out, 'w') as fout:
+        for target_header, decoy_seq in args.existing_decoy_records:
+            if args.names:
+                header = '>{}_{}'.format(args.dprefix, target_header.strip('>'))
+            else:
+                header = '>{}_{}'.format(args.dprefix, target_header.strip('>'))
+            fout.write(header + '\n' + decoy_seq + '\n')
+        if os.path.exists(args.dout):
+            with open(args.dout, 'r') as fin:
+                for line in fin:
+                    fout.write(line)
+    os.replace(tmp_out, args.dout)
 
 def get_target_peptides(args):
     '''digest proteins from input files. use when checkSimilar is enabled
@@ -411,6 +482,10 @@ def main():
     args.tout = args.dout + '.tempfile'
     if not args.target_file:
         args.target_file = args.dout + '.temptargetfile'
+    if args.existing_decoy:
+        if not args.names:
+            print('existing-decoy is set; enabling --keep_names')
+        args.names = True
 
     checkSimilar = args.checkSimilar
     if checkSimilar:
@@ -440,6 +515,9 @@ def main():
     if checkSimilar:
         args.dAlternative = dAlternative
         checkSimilarForProteins(args)
+
+    if args.existing_decoy:
+        merge_existing_decoys(args)
     
     if args.concat != '':
         print('concat is set to {}. This setting is best for multistage search'.format(args.concat))
@@ -491,6 +569,8 @@ if __name__ == "__main__":
                         help='Set accesion prefix for decoy proteins in output. Default=DECOY')
     parser.add_argument('--output_fasta', '-o', dest='dout', default='decoy.fa',
                         help='Set file to write decoy proteins to. Default=decoy.fa')
+    parser.add_argument('--existing-decoy', dest='existing_decoy', default='',
+                        help='Provide a FASTA file of existing decoy proteins. If set, --keep_names is enabled and decoys are matched by --decoy_prefix.')
     parser.add_argument('--no_isobaric', '-i', dest='iso', default=False,
                         action='store_true', help='Do not make decoy peptides isobaric. Default=False, I will be changed to L in decoy sequences')
     parser.add_argument('--target_I2L', dest='target_i2l', default=False,

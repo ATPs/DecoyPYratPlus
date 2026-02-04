@@ -24,7 +24,8 @@ mamba  install -c conda-forge tqdm numpy
 usage: decoyPYratPlus.py [-h] [--cleavage_sites CSITES] [--anti_cleavage_sites NOC] [--cleavage_position {c,n}]
                          [--min_peptide_length MINLEN] [--max_peptide_length MAXLEN] [--max_iterations MAXIT]
                          [--miss_cleavage MISS_CLEAVAGE] [--do_not_shuffle] [--all_shuffle_mimic] [--do_not_switch]
-                         [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--no_isobaric] [--target_I2L]
+                         [--decoy_prefix DPREFIX] [--output_fasta DOUT] [--existing-decoy EXISTING_DECOY]
+                         [--no_isobaric] [--target_I2L]
                          [--fast_digest] [--threads THREADS] [--keep_names] [--target TARGET_FILE]
                          [--checkSimilar CHECKSIMILAR] [--concat CONCAT] [--dedup]
                          *.fasta|*.fa|*.fasta.gz|*.fa.gz|*.txt|*.txt.gz
@@ -64,6 +65,9 @@ optional arguments:
                         Set accesion prefix for decoy proteins in output. Default=DECOY
   --output_fasta DOUT, -o DOUT
                         Set file to write decoy proteins to. Default=decoy.fa
+  --existing-decoy EXISTING_DECOY
+                        Provide a FASTA file of existing decoy proteins. If set, --keep_names is enabled and
+                        decoys are matched by --decoy_prefix.
   --no_isobaric, -i     Do not make decoy peptides isobaric. Default=False, I will be changed to L in decoy
                         sequences
   --target_I2L          Convert I to L in target output and dedup. Default=False
@@ -161,9 +165,11 @@ Most decoy peptide were generated with the same method as DecoyPYrat
   * Use `R` for Trypsion digestion.
   * This option can be used for multistage searches. 
     > Ivanov, M. V., Levitsky, L. I. & Gorshkov, M. V. Adaptation of Decoy Fusion Strategy for Existing Multi-Stage Search Workflows. J. Am. Soc. Mass Spectrom. 27, 1579–1582 (2016).
+* `--existing-decoy` option added. Provide a FASTA file of existing decoy proteins. Matching is done using `--decoy_prefix` and the target headers embedded in the decoy headers; `--keep_names` is enabled automatically. Existing target and decoy sequences are included when building the peptide sets used for overlap checking. Decoys without matching targets are dropped from the output.
 
 
 ## how it works
+* If `--existing-decoy` is set, existing decoys are matched to targets using `--decoy_prefix`; matched decoys are kept and missing targets get new decoys. The program reports counts of matched/missing targets and decoys without targets, and includes existing target/decoy sequences when building peptide sets for overlap checking.
 * gzipped and multiple files were combined together and output to file defined by `--target` file. If not set, target sequencces won't be saved. Note: target `I` is unchanged by default; use `--target_I2L` to convert `I` to `L`.
 * If `checkSimilar` is not set, it runs the same as `DecoyPYrat`
 * If `checkSimilar` is enabled,
