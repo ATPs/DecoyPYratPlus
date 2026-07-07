@@ -7,8 +7,8 @@ except Exception as exc:
 
 extensions = [
     Extension(
-        name='fast_digest',
-        sources=['decoypyrat/fast_digest.pyx'],
+        name='DecoyPYratPlus.fast_digest',
+        sources=['DecoyPYratPlus/fast_digest.pyx'],
     )
 ]
 

@@ -41,13 +41,45 @@ import time
 import threading
 
 try:
-    from utils import shuffle_decoy_proteins, shuffle, shufflewithmut, read_fasta_file, digest, revswitch,writeseq, all_sublists, TRYPSIN,splitStringWithPeptide, get_new_peptide, get_new_pep_after_checkSimilar,concat_targe_decoy_protein,fasta_files_dedup, set_fast_digest
-except:
-    pass
+    from .utils import (
+        TRYPSIN,
+        all_sublists,
+        concat_targe_decoy_protein,
+        digest,
+        fasta_files_dedup,
+        get_new_pep_after_checkSimilar,
+        get_new_peptide,
+        read_fasta_file,
+        revswitch,
+        set_fast_digest,
+        shuffle,
+        shuffle_decoy_proteins,
+        shufflewithmut,
+        splitStringWithPeptide,
+        writeseq,
+    )
+except ImportError:
+    from utils import (
+        TRYPSIN,
+        all_sublists,
+        concat_targe_decoy_protein,
+        digest,
+        fasta_files_dedup,
+        get_new_pep_after_checkSimilar,
+        get_new_peptide,
+        read_fasta_file,
+        revswitch,
+        set_fast_digest,
+        shuffle,
+        shuffle_decoy_proteins,
+        shufflewithmut,
+        splitStringWithPeptide,
+        writeseq,
+    )
 
 try:
     import tqdm
-except:
+except ImportError:
     print('Cannot import tqdm.py. Please install tqdm.')
     tqdm = False
 

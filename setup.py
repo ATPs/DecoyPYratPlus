@@ -16,7 +16,7 @@ setup(
     license = 'MIT',
     entry_points={
         'console_scripts': [
-            'DecoyPYratPlus = decoypyrat.decoyPYratPlus:main'
+            'DecoyPYratPlus = DecoyPYratPlus.decoyPYratPlus:main'
         ]
     }
 )

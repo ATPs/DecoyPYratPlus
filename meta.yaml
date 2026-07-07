@@ -9,21 +9,21 @@ package:
 build:
     number: 1
     entry_points:
-        - decoypyratplus = decoypyrat.decoyPYratPlus:main
+        - DecoyPYratPlus = DecoyPYratPlus.decoyPYratPlus:main
 
 requirements:
   build:
     - python
     - setuptools
-    - argparse
+    - numpy
 
   run:
     - python
-    - argparse
+    - numpy
 
 test:
   imports:
-    - decoypyrat
+    - DecoyPYratPlus
 
 about:
   home: https://github.com/ATPs/DecoyPYratPlus

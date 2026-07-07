@@ -39,7 +39,7 @@ def _load_fast_digest():
             import fast_digest as fast_mod
             return fast_mod
         except Exception:
-            from decoypyrat import fast_digest as fast_mod
+            from DecoyPYratPlus import fast_digest as fast_mod
             return fast_mod
     except Exception:
         return None
