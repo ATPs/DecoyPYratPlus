@@ -1,11 +1,6 @@
 
-# used to get cmd line arguments
-import argparse
-# used to shuffle peptides
 import random
-# used to rename/delete tmp file
 import os
-import gzip
 import itertools
 from collections import Counter
 import numpy as np
@@ -14,132 +9,25 @@ from multiprocessing import Pool
 import multiprocessing
 import pickle
 import random
-import time
 import gc
-from functools import lru_cache
-
-_FAST_DIGEST_ENABLED = False
-_FAST_DIGEST_AVAILABLE = False
-_FAST_DIGEST_MODULE = None
-
-
-def _load_fast_digest():
-    try:
-        import fast_digest as fast_mod
-        return fast_mod
-    except Exception:
-        pass
-    try:
-        import sys
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(base_dir)
-        if parent_dir and parent_dir not in sys.path:
-            sys.path.insert(0, parent_dir)
-        try:
-            import fast_digest as fast_mod
-            return fast_mod
-        except Exception:
-            from DecoyPYratPlus import fast_digest as fast_mod
-            return fast_mod
-    except Exception:
-        return None
-
-
-def set_fast_digest(enabled):
-    """Enable or disable fast digest/trypsin (Cython). Falls back to Python if unavailable."""
-    global _FAST_DIGEST_ENABLED, _FAST_DIGEST_AVAILABLE, _FAST_DIGEST_MODULE
-    _FAST_DIGEST_ENABLED = bool(enabled)
-    if not _FAST_DIGEST_ENABLED:
-        return
-    if _FAST_DIGEST_AVAILABLE:
-        return
-    fast_mod = _load_fast_digest()
-    if fast_mod is None:
-        try:
-            import pyximport
-            pyximport.install(language_level=3)
-            fast_mod = _load_fast_digest()
-        except Exception:
-            fast_mod = None
-    if fast_mod is None or not hasattr(fast_mod, "digest") or not hasattr(fast_mod, "trypsin"):
-        _FAST_DIGEST_ENABLED = False
-        _FAST_DIGEST_AVAILABLE = False
-        _FAST_DIGEST_MODULE = None
-        print("fast_digest unavailable; falling back to pure Python.")
-        return
-    _FAST_DIGEST_AVAILABLE = True
-    _FAST_DIGEST_MODULE = fast_mod
-
-def read_fasta_file(file_path):
-    """
-    Reads a fasta file and header and sequence.
-    header include '>', but not '\n'
-    """
-    if file_path.endswith('.gz'):
-        file = gzip.open(file_path,'rt')
-    else:
-        file = open(file_path)
-    header = ''
-    sequence_parts = []
-    for line in file:
-        if line.startswith('>'):
-            if sequence_parts:
-                yield header, ''.join(sequence_parts)
-                sequence_parts = []
-            header = line.strip()
-        else:
-            sequence_parts.append(line.strip())
-    if sequence_parts:
-        yield header, ''.join(sequence_parts).strip('*')
-    
-    file.close()
-
-# Tryptic Digest - Can be modified to take 'sites' as argument and digest based on that
-def _digest_python(protein, sites='KR', pos='c', no='P', min_len=0):
-    """Return a list of cleaved peptides with minimum length in protein sequence.
-            protein = sequence
-            sites = string of amino acid cleavage sites
-            pos = n or c for n-terminal or c-terminal cleavage
-            no = amino acids following site that would prevent cleavage ie proline
-            min = minimum length of peptides returned"""
-
-    # for each possible cleavage site insert a comma with before or after depending on pos
-    for s in sites:
-        r = s + ','
-        if pos == 'n':
-            r = ',' + s
-        protein = protein.replace(s, r)
-
-    # for each possible cleavage and all none cleavage remove comma
-    for s in sites:
-        for n in no:
-            a = s + ',' + n
-            if pos == 'n':
-                a = ',' + s + n
-            r = s + n
-            protein = protein.replace(a, r)
-
-    # filter peptides into list by minimum size
-    l = list(filter(lambda x: len(x) >= min_len, (protein.split(','))))
-    return [i for i in l if i]
-
-
-def digest(protein, sites='KR', pos='c', no='P', min_len=0):
-    if _FAST_DIGEST_ENABLED and _FAST_DIGEST_AVAILABLE:
-        return _FAST_DIGEST_MODULE.digest(protein, sites, pos, no, min_len)
-    return _digest_python(protein, sites, pos, no, min_len)
-
-@lru_cache(maxsize=200000)
-def get_new_pep_after_checkSimilar(seq, checkSimilar='GG=N,N=D,Q=E'):
-    '''
-    do replacement of Amino Acids as described in checkSimilar. In default setting, replace GG to N, then N to D, then Q to E.
-    '''
-    seqnew = seq
-    l = checkSimilar.split(',')
-    for e in l:
-        old, new = e.split('=')
-        seqnew = seqnew.replace(old, new)
-    return seqnew
+try:
+    from .digestion import (
+        TRYPSIN,
+        digest,
+        get_new_pep_after_checkSimilar,
+        read_fasta_file,
+        set_fast_digest,
+        splitStringWithPeptide,
+    )
+except ImportError:
+    from digestion import (
+        TRYPSIN,
+        digest,
+        get_new_pep_after_checkSimilar,
+        read_fasta_file,
+        set_fast_digest,
+        splitStringWithPeptide,
+    )
 
 def split_into_n_parts(lst, n):
     """Split a list into n equal parts"""
@@ -337,95 +225,6 @@ def all_sublists(lst):
     for i in range(len(lst) +1):
         for sublist in itertools.combinations(lst,i):
             yield(sublist)
-
-
-
-
-def _trypsin_python(protein, sites='KR', pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
-    '''
-    Digests a protein sequence using trypsin and returns the resulting peptides within a specified length range.
-
-    Args:
-    protein (str): The amino acid sequence of the protein to be digested.
-    sites (str): A string of amino acid cleavage sites for trypsin. default: 'KR' for TRYPSIN.
-    pos (str, optional): A string indicating whether to perform n-terminal or c-terminal cleavage (default is 'c').
-    no (str, optional): Amino acids following the cleavage site that would prevent cleavage (default is 'P').
-    miss_cleavage (int, optional): The maximum number of missed cleavage sites allowed (default is 2).
-    peplen_min (int, optional): The minimum length of peptides to be returned (default is 6).
-    peplen_max (int, optional): The maximum length of peptides to be returned (default is 40).
-
-    Returns:
-    A list of peptides resulting from trypsin digestion of the protein sequence within the specified length range.
-   
-    '''
-    peptides_cut_all = _digest_python(protein = protein, sites=sites, pos=pos, no=no, min_len=0)
-    peptides = []
-    for i in range(miss_cleavage + 1):
-        for j in range(len(peptides_cut_all) - i):
-            peptide = ''.join(peptides_cut_all[j:j + i + 1])
-            peplen = len(peptide)
-            if peplen >= peplen_min and peplen <= peplen_max:
-                peptides.append(peptide)
-
-    return peptides
-
-
-def TRYPSIN(protein, sites='KR', pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
-    if _FAST_DIGEST_ENABLED and _FAST_DIGEST_AVAILABLE:
-        return _FAST_DIGEST_MODULE.trypsin(protein, sites, pos, no, miss_cleavage, peplen_min, peplen_max)
-    return _trypsin_python(protein, sites, pos, no, miss_cleavage, peplen_min, peplen_max)
-
-
-def splitStringWithPeptide(proseq, peptide, anti_cleavage_sites='P', cleavage_sites='KR',pos='c'):
-    '''split proseq to parts, separated by peptide
-    anti_cleavage_sites is the AA after the peptide, like "P"
-    cleavage_sites is the AA before the peptide, like "KR"
-    pos is n or c. cut at n or c terminal
-    '''
-    if not peptide:
-        return [proseq]
-    if peptide not in proseq:
-        return [proseq]
-    
-    # count number of miss cleavage in peptide
-    pep_from_pep = digest(protein = peptide, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min_len=0)
-    pep_from_pep = [i for i in pep_from_pep if i] # remove empty string
-    n_miss_cleavage_site = len(pep_from_pep) - 1
-    if n_miss_cleavage_site > 10:
-        print(proseq, peptide,'double check cleavage')
-    
-    # digest protein
-    peptides = digest(protein = proseq, sites=cleavage_sites, pos=pos, no=anti_cleavage_sites, min_len=0)
-    peptides = [i for i in peptides if i]# remove empty string
-    positions = [[0, len(peptides[0])]]
-    for p in peptides[1:]:
-        positions.append([positions[-1][1], positions[-1][1] + len(p)])
-    # get peptides with n_miss_cleavage_site
-    peptides_miss_cleavage = []
-    positions_miss_cleavage = []
-    positions_peptide = []
-    for i in range(len(peptides) - n_miss_cleavage_site):
-        pep_miss = ''.join(peptides[i:i + n_miss_cleavage_site + 1])
-        pep_miss_pos = [positions[i][0], positions[i+ n_miss_cleavage_site][1]]
-        peptides_miss_cleavage.append(pep_miss)
-        positions_miss_cleavage.append(pep_miss_pos)
-        if pep_miss == peptide:
-            positions_peptide.append(pep_miss_pos)
-    
-    # remove overlapped positions
-    while True:
-        for i in range(len(positions_peptide) - 1):
-            if positions_peptide[i][1] > positions_peptide[i+1][0]:
-                positions_peptide.pop(i + 1)
-                break
-        else:
-            break
-    
-    break_points = [0] + [i for j in positions_peptide for i in j] + [len(proseq)]
-    positions_peptide = [[break_points[i],break_points[i+1]] for i in range(len(break_points) -1)]
-    peptides_seg = [proseq[i:j] for i,j in positions_peptide]
-    return [i for i in peptides_seg if i]
-
 
 def get_new_protein_with_pep_mut_multiple(ls_decoy_proteins,new_decoy_peptides, dAlternative2, alter_protein_better,upeps_extra2, args):
     results = []

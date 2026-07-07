@@ -41,39 +41,47 @@ import time
 import threading
 
 try:
-    from .utils import (
+    from .digestion import (
         TRYPSIN,
+        digest,
+        get_decoy_peptides,
+        get_new_pep_after_checkSimilar,
+        get_target_peptides,
+        read_fasta_file,
+        set_fast_digest,
+        splitStringWithPeptide,
+    )
+    from .utils import (
         all_sublists,
         concat_targe_decoy_protein,
-        digest,
         fasta_files_dedup,
-        get_new_pep_after_checkSimilar,
         get_new_peptide,
-        read_fasta_file,
         revswitch,
-        set_fast_digest,
         shuffle,
         shuffle_decoy_proteins,
         shufflewithmut,
-        splitStringWithPeptide,
         writeseq,
     )
 except ImportError:
-    from utils import (
+    from digestion import (
         TRYPSIN,
+        digest,
+        get_decoy_peptides,
+        get_new_pep_after_checkSimilar,
+        get_target_peptides,
+        read_fasta_file,
+        set_fast_digest,
+        splitStringWithPeptide,
+    )
+    from utils import (
         all_sublists,
         concat_targe_decoy_protein,
-        digest,
         fasta_files_dedup,
-        get_new_pep_after_checkSimilar,
         get_new_peptide,
-        read_fasta_file,
         revswitch,
-        set_fast_digest,
         shuffle,
         shuffle_decoy_proteins,
         shufflewithmut,
-        splitStringWithPeptide,
         writeseq,
     )
 
@@ -271,53 +279,6 @@ def merge_existing_decoys(args):
                 for line in fin:
                     fout.write(line)
     os.replace(tmp_out, args.dout)
-
-def get_target_peptides(args):
-    '''digest proteins from input files. use when checkSimilar is enabled
-    '''
-    start_time = time.time()
-    target_peptide_extra = set()
-    for file_fasta in args.fasta:
-        for header, seq in read_fasta_file(file_path=file_fasta):
-            target_protein_seq = seq
-            if not args.iso:
-                target_protein_seq = target_protein_seq.replace('I', 'L')
-            target_peptide_extra.update(TRYPSIN(target_protein_seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos))
-
-    # add more upeps
-    upeps_extra = target_peptide_extra
-    print('target peptides after allowing missed clevage:',len(upeps_extra))
-    print('checkSimilar is enabled!', args.checkSimilar)
-    # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
-    upeps_extra2 = set([get_new_pep_after_checkSimilar(i, args.checkSimilar) for i in upeps_extra])
-    print('target peptides after', args.checkSimilar,len(upeps_extra2))
-    del upeps_extra
-    print("--- {:.2f} seconds digest input proteins allowing miss cleavage ---".format(time.time() - start_time))
-    # open(args.tout + '.tempfile.upeps_extra2','w').write(str(upeps_extra2))
-    args.upeps_extra2 = upeps_extra2
-
-def get_decoy_peptides(args):
-    '''digest proteins from final decoy file. use when checkSimilar is enabled
-    '''
-    start_time = time.time()
-    decoy_peptide_extra = set()
-    for header, seq in read_fasta_file(file_path=args.dout):
-        decoy_protein_seq = seq
-        if not args.iso:
-            decoy_protein_seq = decoy_protein_seq.replace('I', 'L')
-        decoy_peptide_extra.update(TRYPSIN(decoy_protein_seq, miss_cleavage=args.miss_cleavage, peplen_min=args.minlen, peplen_max=args.maxlen, sites=args.csites, no=args.noc, pos=args.cpos))
-
-    # add more upeps
-    dpeps_extra = decoy_peptide_extra
-    print('decoy peptides after allowing missed clevage:',len(dpeps_extra))
-    print('checkSimilar is enabled!',args.checkSimilar)
-    # if checkSimilar, N=D, Q=E,GG=N, replace N with D, replace Q with E, replace GG with N
-    dpeps_extra2 = set([get_new_pep_after_checkSimilar(i, args.checkSimilar) for i in dpeps_extra])
-    print('decoy peptides after ', args.checkSimilar, len(dpeps_extra2))
-    del dpeps_extra
-    print("--- {:.2f} seconds digest decoy proteins allowing miss cleavage ---".format(time.time() - start_time))
-    # open(args.tout + '.tempfile.upeps_extra2','w').write(str(upeps_extra2))
-    args.dpeps_extra2 = dpeps_extra2
 
 def get_decoy_proteins(args, fout):
     '''use when checkSimilar is enabled. 

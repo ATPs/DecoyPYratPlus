@@ -30,6 +30,11 @@ import random
 #used to rename/delete tmp file
 import os
 
+try:
+	from .digestion import digest
+except ImportError:
+	from digestion import digest
+
 
 #Read command line arguments and create help documentation using argparse
 parser = argparse.ArgumentParser(
@@ -52,37 +57,6 @@ parser.add_argument('--memory_save', '-m', dest='mem', default=False, action='st
 parser.add_argument('--keep_names', '-k', dest='names', default=False, action='store_true', help='Keep sequence names in the decoy output. Default=false')
 args = parser.parse_args()
 
-
-
-
-#Tryptic Digest - Can be modified to take 'sites' as argument and digest based on that
-def digest(protein, sites, pos, no, min):
-	"""Return a list of cleaved peptides with minimum length in protein sequence.
-		protein = sequence
-		sites = string of amino acid cleavage sites
-		pos = n or c for n-terminal or c-terminal cleavage
-		no = amino acids following site that would prevent cleavage ie proline
-		min = minimum length of peptides returned"""
-	
-	#for each possible cleavage site insert a comma with before or after depending on pos
-	for s in sites:
-		r = s + ','
-		if pos == 'n':
-			r = ',' + s
-		protein = protein.replace(s, r)
-	
-	#for each possible cleavage and all none cleavage remove comma
-	for s in sites:
-		for n in no:
-			a = s + ',' + n
-			if pos == 'n':
-				a = ',' + s + n
-			r = s + n
-			protein = protein.replace(a, r)
-	
-	#filter peptides into list by minimum size
-	return list(filter(lambda x: len(x)>=min, (protein.split(','))))
-	
 def revswitch (protein, noswitch, sites):
 	"""Return a reversed protein sequence with cleavage residues switched with preceding residue"""
 	#reverse protein sequence with a reverse splice convert to list

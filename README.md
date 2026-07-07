@@ -118,6 +118,34 @@ python setup_fast_digest.py build_ext --inplace
 
 If the extension is not available, DecoyPYratPlus falls back to the pure Python implementation automatically.
 
+## Digestion CLI
+
+The digestion helpers are also available as a standalone CLI:
+
+```bash
+python -m DecoyPYratPlus.digestion --sequence AKRPQK -c KR -a P -l 2
+```
+
+Digest one or more FASTA files with trypsin mode:
+
+```bash
+python -m DecoyPYratPlus.digestion proteins.fa --method trypsin -L 2 -l 6 -M 40
+```
+
+Output formats:
+
+- `tsv` writes `header<TAB>peptide` rows.
+- `peptide` writes one peptide per line.
+- `fasta` writes each peptide as FASTA using `--header-template`, default `{protein_id}_{index}`.
+
+Examples:
+
+```bash
+python -m DecoyPYratPlus.digestion proteins.fa --output-format tsv
+python -m DecoyPYratPlus.digestion proteins.fa --output-format peptide
+python -m DecoyPYratPlus.digestion proteins.fa --output-format fasta
+```
+
 ## Behavior Notes
 
 - By default the output contains decoy proteins only, written to `decoy.fa`.
