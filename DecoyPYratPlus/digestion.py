@@ -8,6 +8,95 @@ from functools import lru_cache
 _FAST_DIGEST_ENABLED = False
 _FAST_DIGEST_AVAILABLE = False
 _FAST_DIGEST_MODULE = None
+ALL_RESIDUES = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+DEFAULT_ENZYME = 'Trypsin'
+ENZYME_PRESETS = {
+    'Cut_everywhere': {'pos': 'n', 'sites': ALL_RESIDUES, 'no': ''},
+    'Trypsin': {'pos': 'c', 'sites': 'KR', 'no': 'P'},
+    'Trypsin/P': {'pos': 'c', 'sites': 'KR', 'no': ''},
+    'Lys_C': {'pos': 'c', 'sites': 'K', 'no': 'P'},
+    'Lys_N': {'pos': 'n', 'sites': 'K', 'no': ''},
+    'Arg_C': {'pos': 'c', 'sites': 'R', 'no': 'P'},
+    'Asp_N': {'pos': 'n', 'sites': 'DN', 'no': ''},
+    'CNBr': {'pos': 'c', 'sites': 'M', 'no': ''},
+    'Asp-N_ambic': {'pos': 'c', 'sites': 'DE', 'no': ''},
+    'PepsinA': {'pos': 'c', 'sites': 'FL', 'no': ''},
+    'Chymotrypsin': {'pos': 'c', 'sites': 'FWYL', 'no': 'P'},
+    'No_cut': {'pos': 'c', 'sites': '@', 'no': '@'},
+}
+ENZYME_LOOKUP = {name.lower(): name for name in ENZYME_PRESETS}
+DESCRIPTION = """Digest protein sequences from FASTA input or a direct sequence string.
+
+Input modes:
+  1. FASTA file(s): python DecoyPYratPlus/digestion.py proteins.fa proteins2.fa.gz
+  2. One sequence:  python DecoyPYratPlus/digestion.py --sequence AKRPQK
+
+Cleavage rules:
+  - Default behavior is the same as --enzyme Trypsin.
+  - Use --enzyme for Comet-style presets.
+  - Use -c/-a/-p to override the preset manually.
+
+I/L handling in this standalone CLI:
+  - Default: keep I and L distinct.
+  - --isobaric: normalize I -> L before digestion.
+"""
+EPILOG = """Examples:
+  Single-sequence digest:
+    python DecoyPYratPlus/digestion.py --sequence AKRPQK -l 2
+
+  FASTA digestion with missed cleavages:
+    python DecoyPYratPlus/digestion.py proteins.fa --method trypsin -L 2 -l 6 -M 40
+
+  Output-format examples:
+    python DecoyPYratPlus/digestion.py proteins.fa --output-format tsv
+      >sp|P12345\\tAK
+      >sp|P12345\\tRPQK
+
+    python DecoyPYratPlus/digestion.py proteins.fa --output-format peptide
+      AK
+      RPQK
+
+    python DecoyPYratPlus/digestion.py proteins.fa --output-format fasta
+      >sp|P12345_1
+      AK
+      >sp|P12345_2
+      RPQK
+
+  Header-template examples (only used with --output-format fasta):
+    --header-template "{protein_id}_{index}"     -> >sp|P12345_1
+    --header-template "{protein_id}|pep{index}" -> >sp|P12345|pep1
+    --header-template "pep{index}"              -> >pep1
+
+  Enzyme preset examples:
+    python DecoyPYratPlus/digestion.py proteins.fa --enzyme Trypsin
+    python DecoyPYratPlus/digestion.py proteins.fa --enzyme No_cut
+    python DecoyPYratPlus/digestion.py proteins.fa --enzyme Cut_everywhere
+    python DecoyPYratPlus/digestion.py proteins.fa --enzyme Trypsin -a ""
+
+Comet-style enzyme presets for --enzyme NAME:
+  0.  Cut_everywhere         0      -           -
+  1.  Trypsin                1      KR          P
+  2.  Trypsin/P              1      KR          -
+  3.  Lys_C                  1      K           P
+  4.  Lys_N                  0      K           -
+  5.  Arg_C                  1      R           P
+  6.  Asp_N                  0      DN          -
+  7.  CNBr                   1      M           -
+  8.  Asp-N_ambic            1      DE          -
+  9.  PepsinA                1      FL          -
+  10. Chymotrypsin           1      FWYL        P
+  11. No_cut                 1      @           @
+
+Notes:
+  - In the preset table, 1 means c-terminal cleavage and 0 means n-terminal cleavage.
+  - Cut_everywhere emits one residue per peptide in --method digest.
+  - No_cut emits the full sequence as one peptide.
+  - Manual -c/-a/-p values override --enzyme when both are present.
+"""
+
+
+class DigestionHelpFormatter(argparse.RawTextHelpFormatter):
+    pass
 
 
 def _load_fast_digest():
@@ -236,7 +325,9 @@ def get_decoy_peptides(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description='Digest protein sequences from FASTA input or a direct sequence string.'
+        description=DESCRIPTION,
+        epilog=EPILOG,
+        formatter_class=DigestionHelpFormatter,
     )
     parser.add_argument(
         'fasta',
@@ -250,26 +341,35 @@ def build_parser():
         help='Digest a single protein sequence directly instead of reading FASTA input',
     )
     parser.add_argument(
+        '--enzyme',
+        default='',
+        help='Comet-style enzyme preset name.\n'
+             'Examples: Trypsin, Trypsin/P, Lys_N, No_cut, Cut_everywhere',
+    )
+    parser.add_argument(
         '--cleavage_sites',
         '-c',
         dest='csites',
-        default='KR',
-        help='A list of amino acids at which to cleave during digestion. Default = KR',
+        default=None,
+        help='Manual cleavage residues. Overrides --enzyme.\n'
+             'Example: -c KR',
     )
     parser.add_argument(
         '--anti_cleavage_sites',
         '-a',
         dest='noc',
-        default='P',
-        help='A list of amino acids at which not to cleave if following cleavage site. Default = P',
+        default=None,
+        help='Manual anti-cleavage residues. Overrides --enzyme.\n'
+             'Use -a "" to disable anti-cleavage filtering.',
     )
     parser.add_argument(
         '--cleavage_position',
         '-p',
         dest='cpos',
-        default='c',
+        default=None,
         choices=['c', 'n'],
-        help='Set cleavage to be c or n terminal of specified cleavage sites. Default = c',
+        help='Manual cleavage position. Overrides --enzyme.\n'
+             'c = cut after the site, n = cut before the site.',
     )
     parser.add_argument(
         '--min_peptide_length',
@@ -296,12 +396,12 @@ def build_parser():
         help='Missed cleavage count for trypsin mode. Default = 2',
     )
     parser.add_argument(
-        '--no_isobaric',
-        '-i',
-        dest='iso',
+        '--isobaric',
+        dest='isobaric',
         default=False,
         action='store_true',
-        help='Do not change I to L before digestion. Default=False',
+        help='Normalize I -> L before digestion.\n'
+             'Default is to keep I and L distinct in this standalone CLI.',
     )
     parser.add_argument(
         '--fast_digest',
@@ -314,27 +414,60 @@ def build_parser():
         '--method',
         choices=['digest', 'trypsin'],
         default='digest',
-        help='Digestion method to run. Default=digest',
+        help='Digestion mode.\n'
+             'digest  = non-overlapping enzyme segments\n'
+             'trypsin = include missed-cleavage peptide combinations',
     )
     parser.add_argument(
         '--output-format',
         choices=['tsv', 'peptide', 'fasta'],
         default='tsv',
-        help='Output format. Default=tsv',
+        help='Output format.\n'
+             'tsv     -> >protein_header\\tPEPTIDE\n'
+             'peptide -> PEPTIDE\n'
+             'fasta   -> >protein_id_1\\nPEPTIDE',
     )
     parser.add_argument(
         '--header-template',
         default='{protein_id}_{index}',
-        help='Header template for FASTA output. Default={protein_id}_{index}',
+        help='Header template for --output-format fasta.\n'
+             'Placeholders: {protein_id}, {index}, {header}\n'
+             'Examples:\n'
+             '  {protein_id}_{index}\n'
+             '  {protein_id}|pep{index}\n'
+             '  pep{index}',
     )
     return parser
 
 
 def _normalize_sequence(sequence, isobaric):
     sequence = sequence.upper().strip('*')
-    if not isobaric:
+    if isobaric:
         sequence = sequence.replace('I', 'L')
     return sequence
+
+
+def _resolve_enzyme_name(name):
+    if not name:
+        return None
+    resolved = ENZYME_LOOKUP.get(name.lower())
+    if resolved is None:
+        raise ValueError(
+            'unknown enzyme {!r}. Choose from: {}'.format(
+                name, ', '.join(ENZYME_PRESETS.keys())
+            )
+        )
+    return resolved
+
+
+def _resolve_cli_cleavage(args):
+    enzyme_name = _resolve_enzyme_name(args.enzyme) or DEFAULT_ENZYME
+    preset = ENZYME_PRESETS[enzyme_name]
+    args.enzyme = enzyme_name
+    args.csites = preset['sites'] if args.csites is None else args.csites
+    args.noc = preset['no'] if args.noc is None else args.noc
+    args.cpos = preset['pos'] if args.cpos is None else args.cpos
+    return args
 
 
 def _digest_sequence(sequence, args):
@@ -353,13 +486,13 @@ def _digest_sequence(sequence, args):
 
 def iter_digestion_results(args):
     if args.sequence:
-        sequence = _normalize_sequence(args.sequence, args.iso)
+        sequence = _normalize_sequence(args.sequence, args.isobaric)
         yield 'sequence', _digest_sequence(sequence, args)
         return
 
     for file_fasta in args.fasta:
         for header, sequence in read_fasta_file(file_path=file_fasta):
-            normalized_sequence = _normalize_sequence(sequence, args.iso)
+            normalized_sequence = _normalize_sequence(sequence, args.isobaric)
             yield header, _digest_sequence(normalized_sequence, args)
 
 
@@ -390,6 +523,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if bool(args.sequence) == bool(args.fasta):
         parser.error('provide either FASTA input or --sequence')
+    try:
+        args = _resolve_cli_cleavage(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     set_fast_digest(args.fast_digest)
     try:
         write_output(iter_digestion_results(args), args, sys.stdout)

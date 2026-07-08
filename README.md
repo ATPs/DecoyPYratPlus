@@ -123,19 +123,35 @@ If the extension is not available, DecoyPYratPlus falls back to the pure Python 
 The digestion helpers are also available as a standalone CLI:
 
 ```bash
-python -m DecoyPYratPlus.digestion --sequence AKRPQK -c KR -a P -l 2
+python -m DecoyPYratPlus.digestion --sequence AKRPQK -l 2
 ```
 
-Digest one or more FASTA files with trypsin mode:
+In this standalone CLI, `I` and `L` are kept distinct by default. Add `--isobaric` if you want `I -> L` normalization before digestion.
+
+Digest one or more FASTA files with missed-cleavage expansion:
 
 ```bash
 python -m DecoyPYratPlus.digestion proteins.fa --method trypsin -L 2 -l 6 -M 40
 ```
 
+Use Comet-style enzyme presets:
+
+```bash
+python -m DecoyPYratPlus.digestion proteins.fa --enzyme Trypsin
+python -m DecoyPYratPlus.digestion proteins.fa --enzyme No_cut
+python -m DecoyPYratPlus.digestion proteins.fa --enzyme Cut_everywhere
+```
+
+Manual cleavage flags still work and override the preset:
+
+```bash
+python -m DecoyPYratPlus.digestion proteins.fa --enzyme Trypsin -a ""
+```
+
 Output formats:
 
-- `tsv` writes `header<TAB>peptide` rows.
-- `peptide` writes one peptide per line.
+- `tsv` writes `header<TAB>peptide` rows such as `>sp|P12345<TAB>AK`.
+- `peptide` writes one peptide per line such as `AK`.
 - `fasta` writes each peptide as FASTA using `--header-template`, default `{protein_id}_{index}`.
 
 Examples:
@@ -144,12 +160,15 @@ Examples:
 python -m DecoyPYratPlus.digestion proteins.fa --output-format tsv
 python -m DecoyPYratPlus.digestion proteins.fa --output-format peptide
 python -m DecoyPYratPlus.digestion proteins.fa --output-format fasta
+python -m DecoyPYratPlus.digestion proteins.fa --output-format fasta --header-template "{protein_id}|pep{index}"
 ```
+
+Supported `--header-template` placeholders are `{protein_id}`, `{index}`, and `{header}`.
 
 ## Behavior Notes
 
 - By default the output contains decoy proteins only, written to `decoy.fa`.
-- Unless `--no_isobaric` is set, decoy generation treats `I` as `L`.
+- In the main `DecoyPYratPlus` decoy-generation CLI, `I` is treated as `L` unless `--no_isobaric` is set.
 - With `--keep_names`, output headers keep the original target identifier as `DECOY_<target_header>`.
 - With `--existing-decoy`, matching decoys are preserved, missing targets get new decoys, and decoys without targets are dropped.
 - The legacy single-file DecoyPYrat script is still present as `DecoyPYratPlus/decoyPYrat.py`.

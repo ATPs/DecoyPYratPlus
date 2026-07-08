@@ -61,6 +61,16 @@ class DigestionFunctionTests(unittest.TestCase):
 
 
 class DigestionCliTests(unittest.TestCase):
+    def run_script_cli(self, *args):
+        result = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "DecoyPYratPlus" / "digestion.py"), *args],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout
+
     def run_cli(self, *args):
         result = subprocess.run(
             [sys.executable, "-m", "DecoyPYratPlus.digestion", *args],
@@ -71,14 +81,22 @@ class DigestionCliTests(unittest.TestCase):
         )
         return result.stdout
 
-    def test_sequence_cli_output_formats(self):
+    def test_help_contains_examples_and_enzyme_presets(self):
+        help_output = self.run_script_cli("--help")
+        self.assertIn("keep I and L distinct", help_output)
+        self.assertIn("python DecoyPYratPlus/digestion.py --sequence AKRPQK -l 2", help_output)
+        self.assertIn("--header-template \"{protein_id}|pep{index}\"", help_output)
+        self.assertIn("Cut_everywhere", help_output)
+        self.assertIn("No_cut", help_output)
+        self.assertIn("Comet-style enzyme presets", help_output)
+        self.assertIn(">sp|P12345\\tAK", help_output)
+
+    def test_default_sequence_cli_output_formats(self):
         tsv_output = self.run_cli(
             "--sequence",
             "AKRPQK",
-            "-c",
-            "KR",
-            "-a",
-            "P",
+            "--enzyme",
+            "Trypsin",
             "-l",
             "2",
             "--output-format",
@@ -89,10 +107,8 @@ class DigestionCliTests(unittest.TestCase):
         peptide_output = self.run_cli(
             "--sequence",
             "AKRPQK",
-            "-c",
-            "KR",
-            "-a",
-            "P",
+            "--enzyme",
+            "Trypsin",
             "-l",
             "2",
             "--output-format",
@@ -103,16 +119,107 @@ class DigestionCliTests(unittest.TestCase):
         fasta_output = self.run_cli(
             "--sequence",
             "AKRPQK",
-            "-c",
-            "KR",
-            "-a",
-            "P",
+            "--enzyme",
+            "Trypsin",
             "-l",
             "2",
             "--output-format",
             "fasta",
         )
         self.assertEqual(fasta_output, ">sequence_1\nAK\n>sequence_2\nRPQK\n")
+
+    def test_isobaric_default_and_override(self):
+        peptide_output = self.run_cli(
+            "--sequence",
+            "AILK",
+            "--enzyme",
+            "No_cut",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(peptide_output, "AILK\n")
+
+        peptide_output_isobaric = self.run_cli(
+            "--sequence",
+            "AILK",
+            "--enzyme",
+            "No_cut",
+            "--isobaric",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(peptide_output_isobaric, "ALLK\n")
+
+    def test_enzyme_presets_and_manual_override(self):
+        no_cut_output = self.run_cli(
+            "--sequence",
+            "AILK",
+            "--enzyme",
+            "No_cut",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(no_cut_output, "AILK\n")
+
+        cut_everywhere_output = self.run_cli(
+            "--sequence",
+            "AKRPQ",
+            "--enzyme",
+            "Cut_everywhere",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(cut_everywhere_output, "A\nK\nR\nP\nQ\n")
+
+        trypsin_output = self.run_cli(
+            "--sequence",
+            "AKRPQK",
+            "--enzyme",
+            "Trypsin",
+            "-l",
+            "2",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(trypsin_output, "AK\nRPQK\n")
+
+        lys_n_output = self.run_cli(
+            "--sequence",
+            "KAAKBB",
+            "--enzyme",
+            "Lys_N",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(lys_n_output, "KAA\nKBB\n")
+
+        override_output = self.run_cli(
+            "--sequence",
+            "KAAKBB",
+            "--enzyme",
+            "No_cut",
+            "-c",
+            "K",
+            "-a",
+            "",
+            "-p",
+            "c",
+            "-l",
+            "1",
+            "--output-format",
+            "peptide",
+        )
+        self.assertEqual(override_output, "K\nAAK\nBB\n")
 
     def test_fasta_cli_output_formats(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -123,10 +230,10 @@ class DigestionCliTests(unittest.TestCase):
                 str(fasta_path),
                 "--method",
                 "trypsin",
+                "--enzyme",
+                "Trypsin/P",
                 "-c",
                 "K",
-                "-a",
-                "",
                 "-L",
                 "1",
                 "-l",
@@ -142,10 +249,10 @@ class DigestionCliTests(unittest.TestCase):
                 str(fasta_path),
                 "--method",
                 "trypsin",
+                "--enzyme",
+                "Trypsin/P",
                 "-c",
                 "K",
-                "-a",
-                "",
                 "-L",
                 "1",
                 "-l",
@@ -161,10 +268,10 @@ class DigestionCliTests(unittest.TestCase):
                 str(fasta_path),
                 "--method",
                 "trypsin",
+                "--enzyme",
+                "Trypsin/P",
                 "-c",
                 "K",
-                "-a",
-                "",
                 "-L",
                 "1",
                 "-l",
@@ -173,10 +280,12 @@ class DigestionCliTests(unittest.TestCase):
                 "4",
                 "--output-format",
                 "fasta",
+                "--header-template",
+                "{protein_id}|pep{index}",
             )
             self.assertEqual(
                 fasta_output,
-                ">prot1_1\nAK\n>prot1_2\nBK\n>prot1_3\nCK\n>prot1_4\nAKBK\n>prot1_5\nBKCK\n",
+                ">prot1|pep1\nAK\n>prot1|pep2\nBK\n>prot1|pep3\nCK\n>prot1|pep4\nAKBK\n>prot1|pep5\nBKCK\n",
             )
 
     def test_legacy_script_reuses_digestion_digest(self):
@@ -198,6 +307,52 @@ class DigestionCliTests(unittest.TestCase):
             check=True,
         )
         self.assertEqual(result.stdout.strip(), "True")
+
+    def test_main_decoypyratplus_default_no_isobaric_behavior_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_fasta = Path(tmpdir) / "input.fa"
+            default_output = Path(tmpdir) / "default.fa"
+            no_isobaric_output = Path(tmpdir) / "no_isobaric.fa"
+            input_fasta.write_text(">p1\nAIIK\n", encoding="ascii")
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "DecoyPYratPlus.decoyPYratPlus",
+                    str(input_fasta),
+                    "-o",
+                    str(default_output),
+                    "--keep_names",
+                    "--do_not_shuffle",
+                    "--do_not_switch",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertIn("KLLA", default_output.read_text(encoding="ascii"))
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "DecoyPYratPlus.decoyPYratPlus",
+                    str(input_fasta),
+                    "-o",
+                    str(no_isobaric_output),
+                    "--keep_names",
+                    "--do_not_shuffle",
+                    "--do_not_switch",
+                    "--no_isobaric",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertIn("KIIA", no_isobaric_output.read_text(encoding="ascii"))
 
 
 if __name__ == "__main__":
