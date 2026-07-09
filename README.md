@@ -142,6 +142,8 @@ python -m DecoyPYratPlus.digestion proteins.fa --enzyme No_cut
 python -m DecoyPYratPlus.digestion proteins.fa --enzyme Cut_everywhere
 ```
 
+`Cut_everywhere` is treated as random-cut / no-enzyme digestion, so it emits every contiguous peptide that passes the active `-l/-M` length filters instead of only single-residue fragments.
+
 Manual cleavage flags still work and override the preset:
 
 ```bash

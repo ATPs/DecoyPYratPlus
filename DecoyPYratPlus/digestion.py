@@ -89,7 +89,8 @@ Comet-style enzyme presets for --enzyme NAME:
 
 Notes:
   - In the preset table, 1 means c-terminal cleavage and 0 means n-terminal cleavage.
-  - Cut_everywhere emits one residue per peptide in --method digest.
+  - Cut_everywhere behaves like random-cut / no-enzyme digestion.
+  - Cut_everywhere emits every contiguous peptide that matches the min/max length filters.
   - No_cut emits the full sequence as one peptide.
   - Manual -c/-a/-p values override --enzyme when both are present.
 """
@@ -212,6 +213,21 @@ def TRYPSIN(protein, sites='KR', pos='c', no='P', miss_cleavage=2, peplen_min=6,
     if _FAST_DIGEST_ENABLED and _FAST_DIGEST_AVAILABLE:
         return _FAST_DIGEST_MODULE.trypsin(protein, sites, pos, no, miss_cleavage, peplen_min, peplen_max)
     return _trypsin_python(protein, sites, pos, no, miss_cleavage, peplen_min, peplen_max)
+
+
+def _random_digest_python(protein, peplen_min=0, peplen_max=None):
+    """Return every contiguous peptide that matches the requested length bounds."""
+    if peplen_max is not None and peplen_max < peplen_min:
+        return []
+
+    seqlen = len(protein)
+    start_len = max(peplen_min, 1)
+    end_len = seqlen if peplen_max is None else min(peplen_max, seqlen)
+    peptides = []
+    for peptide_len in range(start_len, end_len + 1):
+        for start in range(seqlen - peptide_len + 1):
+            peptides.append(protein[start:start + peptide_len])
+    return peptides
 
 
 @lru_cache(maxsize=200000)
@@ -385,7 +401,7 @@ def build_parser():
         dest='maxlen',
         default=40,
         type=int,
-        help='Set maximum peptide length. Only used by trypsin mode. Default = 40',
+        help='Set maximum peptide length. Used by trypsin mode and Cut_everywhere. Default = 40',
     )
     parser.add_argument(
         '--miss_cleavage',
@@ -415,7 +431,7 @@ def build_parser():
         choices=['digest', 'trypsin'],
         default='digest',
         help='Digestion mode.\n'
-             'digest  = non-overlapping enzyme segments\n'
+             'digest  = enzyme segments; Cut_everywhere becomes random-cut output\n'
              'trypsin = include missed-cleavage peptide combinations',
     )
     parser.add_argument(
@@ -470,7 +486,18 @@ def _resolve_cli_cleavage(args):
     return args
 
 
+def _uses_random_cut(args):
+    cut_everywhere = ENZYME_PRESETS['Cut_everywhere']
+    return (
+        args.csites == cut_everywhere['sites']
+        and args.noc == cut_everywhere['no']
+        and args.cpos == cut_everywhere['pos']
+    )
+
+
 def _digest_sequence(sequence, args):
+    if _uses_random_cut(args):
+        return _random_digest_python(sequence, peplen_min=args.minlen, peplen_max=args.maxlen)
     if args.method == 'trypsin':
         return TRYPSIN(
             sequence,

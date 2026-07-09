@@ -173,11 +173,13 @@ class DigestionCliTests(unittest.TestCase):
             "--enzyme",
             "Cut_everywhere",
             "-l",
-            "1",
+            "2",
+            "-M",
+            "3",
             "--output-format",
             "peptide",
         )
-        self.assertEqual(cut_everywhere_output, "A\nK\nR\nP\nQ\n")
+        self.assertEqual(cut_everywhere_output, "AK\nKR\nRP\nPQ\nAKR\nKRP\nRPQ\n")
 
         trypsin_output = self.run_cli(
             "--sequence",
@@ -207,7 +209,7 @@ class DigestionCliTests(unittest.TestCase):
             "--sequence",
             "KAAKBB",
             "--enzyme",
-            "No_cut",
+            "Cut_everywhere",
             "-c",
             "K",
             "-a",
