@@ -203,14 +203,24 @@ def writeseq(args, seq, upeps, dpeps, outfa, pid, dcount):
         seq = seq.replace('I', 'L')
 
     # digest sequence add peptides to set
-    upeps.update(digest(seq, args.csites, args.cpos, args.noc, args.minlen))
+    upeps.update(
+        digest(seq, args.csites, args.cpos, args.noc, args.minlen, max_len=args.maxlen)
+    )
 
     # reverse and switch protein sequence
     decoyseq = revswitch(seq, args.noswitch, args.csites, args.noc, args.cpos)
 
     # update decoy peptide set
-    dpeps.update(digest(decoyseq, args.csites,
-                    args.cpos, args.noc, args.minlen))
+    dpeps.update(
+        digest(
+            decoyseq,
+            args.csites,
+            args.cpos,
+            args.noc,
+            args.minlen,
+            max_len=args.maxlen,
+        )
+    )
 
     # write decoy protein accession and sequence to file
     if args.names:

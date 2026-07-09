@@ -3,11 +3,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from contextlib import redirect_stdout
 from pathlib import Path
 
 from DecoyPYratPlus import decoyPYratPlus
 from DecoyPYratPlus import digestion
+from DecoyPYratPlus import utils
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +22,10 @@ class DigestionFunctionTests(unittest.TestCase):
     def test_digest_n_terminal_cleavage(self):
         peptides = digestion.digest("KAAKBB", sites="K", pos="n", no="", min_len=1)
         self.assertEqual(peptides, ["KAA", "KBB"])
+
+    def test_digest_max_length_filters_peptides(self):
+        peptides = digestion.digest("AKRPQK", sites="KR", pos="c", no="P", min_len=2, max_len=2)
+        self.assertEqual(peptides, ["AK"])
 
     def test_trypsin_missed_cleavage_and_max_length(self):
         peptides = digestion.TRYPSIN(
@@ -58,6 +64,58 @@ class DigestionFunctionTests(unittest.TestCase):
         self.assertIs(decoyPYratPlus.TRYPSIN, digestion.TRYPSIN)
         self.assertIs(decoyPYratPlus.get_target_peptides, digestion.get_target_peptides)
         self.assertIs(decoyPYratPlus.get_decoy_peptides, digestion.get_decoy_peptides)
+
+    def test_utils_writeseq_respects_max_length(self):
+        args = Namespace(
+            iso=False,
+            csites="KR",
+            cpos="c",
+            noc="P",
+            minlen=2,
+            maxlen=2,
+            noswitch=True,
+            names=True,
+            dprefix="DECOY",
+        )
+        upeps = set()
+        dpeps = set()
+        outfa = io.StringIO()
+
+        utils.writeseq(args, "AKRPQK", upeps, dpeps, outfa, ">p1", 1)
+
+        self.assertEqual(upeps, {"AK"})
+        self.assertEqual(dpeps, set())
+
+    def test_existing_decoy_path_respects_max_length(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            target = tmp_path / "target.fa"
+            existing_decoy = tmp_path / "existing.fa"
+            tout = tmp_path / "decoy.tmp.fa"
+            target.write_text(">p1\nAKRPQK\n", encoding="ascii")
+            existing_decoy.write_text(">DECOY_p1\nAKRPQK\n", encoding="ascii")
+            args = Namespace(
+                fasta=[str(target)],
+                tout=str(tout),
+                target_file="",
+                existing_decoy=str(existing_decoy),
+                dprefix="DECOY",
+                existing_decoy_records=[],
+                iso=False,
+                csites="KR",
+                cpos="c",
+                noc="P",
+                minlen=2,
+                maxlen=2,
+                names=True,
+                noswitch=False,
+            )
+
+            with redirect_stdout(io.StringIO()):
+                upeps, dpeps = decoyPYratPlus.getDecoyProteinByRevert(args)
+
+            self.assertEqual(upeps, {"AK"})
+            self.assertEqual(dpeps, {"AK"})
 
 
 class DigestionCliTests(unittest.TestCase):

@@ -158,11 +158,29 @@ def getDecoyProteinByRevert(args):
                 n_targets_with_decoy += 1
                 decoy_seq_raw = existing_decoy_map[header]
                 seq_for_digest = seq if args.iso else seq.replace('I', 'L')
-                upeps.update(digest(seq_for_digest, args.csites, args.cpos, args.noc, args.minlen))
+                upeps.update(
+                    digest(
+                        seq_for_digest,
+                        args.csites,
+                        args.cpos,
+                        args.noc,
+                        args.minlen,
+                        max_len=args.maxlen,
+                    )
+                )
                 decoy_seq_for_digest = decoy_seq_raw.upper().strip('*')
                 if not args.iso:
                     decoy_seq_for_digest = decoy_seq_for_digest.replace('I', 'L')
-                dpeps.update(digest(decoy_seq_for_digest, args.csites, args.cpos, args.noc, args.minlen))
+                dpeps.update(
+                    digest(
+                        decoy_seq_for_digest,
+                        args.csites,
+                        args.cpos,
+                        args.noc,
+                        args.minlen,
+                        max_len=args.maxlen,
+                    )
+                )
                 args.existing_decoy_records.append((header, decoy_seq_raw))
             else:
                 writeseq(args, seq, upeps, dpeps, outfa, header, dcount)
@@ -243,7 +261,14 @@ def shuffleForRevert(args, upeps, dpeps, peps_to_alt = None):
                     # if line is not accession replace peptides in dictionary with alternatives
                     if line[0] != '>':
                         # digest decoy sequence
-                        for p in digest(line.rstrip(), args.csites, args.cpos, args.noc, args.minlen):
+                        for p in digest(
+                            line.rstrip(),
+                            args.csites,
+                            args.cpos,
+                            args.noc,
+                            args.minlen,
+                            max_len=args.maxlen,
+                        ):
                             # store decoy peptide for final count
                             dpeps.add(p)
 
