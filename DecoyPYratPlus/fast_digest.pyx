@@ -43,7 +43,7 @@ cdef list _digest_spans(bytes seq, bytes sites, bytes no, char pos):
     return spans
 
 
-def digest(protein, sites='KR', pos='c', no='P', min_len=0):
+def digest(protein, sites='KR', pos='c', no='P', min_len=0, max_len=None):
     cdef bytes seq = _to_bytes(protein)
     cdef bytes sites_b = _to_bytes(sites)
     cdef bytes no_b = _to_bytes(no)
@@ -54,10 +54,16 @@ def digest(protein, sites='KR', pos='c', no='P', min_len=0):
     cdef Py_ssize_t i
     cdef Py_ssize_t start
     cdef Py_ssize_t end
+    cdef Py_ssize_t peptide_len
+    cdef bint use_max_len = max_len is not None
+    cdef Py_ssize_t max_len_c = 0
+    if use_max_len:
+        max_len_c = max_len
     for i in range(len(spans)):
         start = spans[i][0]
         end = spans[i][1]
-        if end - start >= min_len:
+        peptide_len = end - start
+        if peptide_len >= min_len and (not use_max_len or peptide_len <= max_len_c):
             peptides.append(seq[start:end].decode('ascii'))
     return peptides
 

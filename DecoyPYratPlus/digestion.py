@@ -169,7 +169,7 @@ def read_fasta_file(file_path):
             yield header, ''.join(sequence_parts).strip('*')
 
 
-def _digest_python(protein, sites='KR', pos='c', no='P', min_len=0):
+def _digest_python(protein, sites='KR', pos='c', no='P', min_len=0, max_len=None):
     """Return a list of cleaved peptides with minimum length in protein sequence."""
     for s in sites:
         replacement = s + ','
@@ -185,13 +185,18 @@ def _digest_python(protein, sites='KR', pos='c', no='P', min_len=0):
             protein = protein.replace(anti_cleavage, s + n)
 
     peptides = list(filter(lambda x: len(x) >= min_len, protein.split(',')))
+    if max_len is not None:
+        peptides = [peptide for peptide in peptides if len(peptide) <= max_len]
     return [peptide for peptide in peptides if peptide]
 
 
-def digest(protein, sites='KR', pos='c', no='P', min_len=0):
+def digest(protein, sites='KR', pos='c', no='P', min_len=0, max_len=None):
     if _FAST_DIGEST_ENABLED and _FAST_DIGEST_AVAILABLE:
-        return _FAST_DIGEST_MODULE.digest(protein, sites, pos, no, min_len)
-    return _digest_python(protein, sites, pos, no, min_len)
+        peptides = _FAST_DIGEST_MODULE.digest(protein, sites, pos, no, min_len)
+        if max_len is not None:
+            peptides = [peptide for peptide in peptides if len(peptide) <= max_len]
+        return peptides
+    return _digest_python(protein, sites, pos, no, min_len, max_len=max_len)
 
 
 def _trypsin_python(protein, sites='KR', pos='c', no='P', miss_cleavage=2, peplen_min=6, peplen_max=40):
@@ -401,7 +406,7 @@ def build_parser():
         dest='maxlen',
         default=40,
         type=int,
-        help='Set maximum peptide length. Used by trypsin mode and Cut_everywhere. Default = 40',
+        help='Set maximum peptide length. Applied to all output modes. Default = 40',
     )
     parser.add_argument(
         '--miss_cleavage',
@@ -508,7 +513,14 @@ def _digest_sequence(sequence, args):
             peplen_min=args.minlen,
             peplen_max=args.maxlen,
         )
-    return digest(sequence, sites=args.csites, pos=args.cpos, no=args.noc, min_len=args.minlen)
+    return digest(
+        sequence,
+        sites=args.csites,
+        pos=args.cpos,
+        no=args.noc,
+        min_len=args.minlen,
+        max_len=args.maxlen,
+    )
 
 
 def iter_digestion_results(args):
